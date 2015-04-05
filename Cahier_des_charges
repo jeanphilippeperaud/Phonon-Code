@@ -1,0 +1,5 @@
+1) must handle time dependent and steady
+2) must be able to put pores
+3) periodic boundaries, reflective, prescribed
+4) well organized outputs
+5) volumetric source of several types
