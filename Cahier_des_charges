@@ -3,3 +3,4 @@
 3) periodic boundaries, reflective, prescribed
 4) well organized outputs
 5) volumetric source of several types
+6) must be able to specify all characteristics of detector. Blank characteristics should have a default
