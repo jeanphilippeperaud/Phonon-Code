@@ -848,7 +848,7 @@ void materials::show_all()
 void particle::show_all()
 {
 	cout << "x0: " << pt0.x << "  y0: " << pt0.y << "  index: " << mode_index << "  sig: " << sig <<
-	 "  pol: " << pol << "  V: " << V << "  Vp0x: " << Vp0.x << "  Vp0y: " << Vp0.y << "  Dt: " << Dt <<
+	 "  pol: " << pol << "  V: " << V << "  Vp0x: " << Vp0.x << "  Vp0y: " << Vp0.y << "  t: " << t << "  Dt: " << Dt <<
 	 "  x1: " << pt1.x << "  y1: " << pt1.y << " last collision type:  " << collision_type <<endl;
 }
 
@@ -880,7 +880,7 @@ void particle::move(reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdr
 				seg.length = pdist;
 				collision_type = 1;
 				collision_index = i;
-				Dt = pdist/V; // present version does not handle velocity 0.
+				Dt = pdist/sqrt(Vp0.x*Vp0.x+Vp0.y*Vp0.y); // present version does not handle velocity 0; //!! in 2D cannot use V, must use sqrt(Vx^2+Vy^2)
 			}
 
 
@@ -897,7 +897,7 @@ void particle::move(reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdr
 				seg.length = pdist;
 				collision_type = 2;
 				collision_index = i;
-				Dt = pdist/V;
+				Dt = pdist/sqrt(Vp0.x*Vp0.x+Vp0.y*Vp0.y);
 			}
 		}
 	}
@@ -912,7 +912,7 @@ void particle::move(reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdr
 				seg.length = pdist;
 				collision_type = 3;
 				collision_index = i;
-				Dt = pdist/V;
+				Dt = pdist/sqrt(Vp0.x*Vp0.x+Vp0.y*Vp0.y);
 			}
 		}
 	}
@@ -921,6 +921,7 @@ void particle::move(reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdr
 void particle::finish_move(materials * mat, RandomClass * r, reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdrs * per)
 {
     double R, phi, nx, ny, Vx, Vy;
+    t = t + Dt; // new time. important for transient cases
 	switch(collision_type){
 		case 0  : // scattering (no boundary involved)
 			// update position
@@ -936,7 +937,6 @@ void particle::finish_move(materials * mat, RandomClass * r, reflective_bdrs * r
 			// update other properties
 			tau = mat->tau[mode_index]; //current relaxation time
 	        pol = mat->pol[mode_index]; // current polarization
-	        t = t + Dt; // new time
 			counter++; //increment collision counter
             break;
 		case 1  : // collision with reflective boundary
@@ -999,6 +999,44 @@ public:
 };
 
 volumetric::volumetric(point pt1, point pt2, point pt3, point pt4, double T, double Teq)
+{
+    // assign points to constitutive segments
+    segs[0].point1 = pt1;
+    segs[0].point2 = pt2;
+
+    segs[1].point1 = pt2;
+    segs[1].point2 = pt3;
+
+    segs[2].point1 = pt3;
+    segs[2].point2 = pt4;
+
+    segs[3].point1 = pt4;
+    segs[3].point2 = pt1;
+
+    // calculate area
+    area = calc_area(segs[0].point1,segs[1].point1,segs[1].point2)
+	+calc_area(segs[0].point1,segs[2].point1,segs[2].point2);
+
+    // center of the shape
+    center.x = (pt1.x + pt2.x + pt3.x + pt4.x)/4;
+    center.y = (pt1.y + pt2.y + pt3.y + pt4.y)/4;
+
+	temp = T;
+	temp_eq = Teq;
+
+}
+
+class initial: public quadrilater // for defining initial conditions in the transient case
+{
+public:
+	initial(){};
+	initial(point pt1, point pt2, point pt3, point pt4, double T, double Teq);
+	double temp;
+	double temp_eq;
+
+};
+
+initial::initial(point pt1, point pt2, point pt3, point pt4, double T, double Teq)
 {
     // assign points to constitutive segments
     segs[0].point1 = pt1;
@@ -1104,9 +1142,11 @@ detector_H::detector_H(point pt1, point pt2, point pt3, point pt4, point grad) /
 class detector_T: public quadrilater
 {
 public:
-	detector_T(){};
+	detector_T(){estimates = NULL;};
+	~detector_T();
 	detector_T(point pt1, point pt2, point pt3, point pt4);
     double estimate;
+	double * estimates; // reserved for the transient case
 };
 
 detector_T::detector_T(point pt1, point pt2, point pt3, point pt4)
@@ -1134,6 +1174,13 @@ detector_T::detector_T(point pt1, point pt2, point pt3, point pt4)
 
 	estimate = 0;
 
+}
+
+detector_T::~detector_T()
+{
+	if (estimates!=NULL) {
+		delete[] estimates;
+	}
 }
 
 class detector_array_H { // class that handles and stores the heat flux detectors
@@ -1252,20 +1299,40 @@ void detector_array_H::write(const char* filename)
 
 class detector_array_T { // class that handles and stores the temperature detectors
 public:
-	detector_array_T(const char* filename);
+	detector_array_T(const char* filename, const char * filename_time);
 	~detector_array_T();
 	void measure(particle * part, materials * mat); // updates all temperature detectors from particle trajectory
 	int N; // TOTAL number of temperature detectors
+	int Nt; // number of times for measurement
+	string type;  //TRANSIENT or STEADY
 	detector_T * t_handle; // pointer towards an array of heat flux detectors
+	double * msr_times;
+    int msr_index; // measurement index (for transient cases)
 	void show(); //displays all temperature detectors
 	void show_results();
 	void write(const char * filename); // writes all temperature results in a file
 };
 
-detector_array_T::detector_array_T(const char* filename)
+detector_array_T::detector_array_T(const char* filename,const char* filename_time)
 {
-	ifstream file;
+	ifstream file, filetime;
 	file.open(filename);
+	filetime.open(filename_time);
+	if (filetime.fail()) {
+		Nt = 0;
+		type = "STEADY";
+		msr_times = NULL;
+	}
+	else{
+		type = "TRANSIENT";
+		filetime >> Nt;
+		msr_times = new double[Nt];
+		msr_index = -1;
+		for (int i = 0; i<Nt; i++)
+		{
+			filetime >> msr_times[i];
+		}
+	}
 	double vx, vy;
 	if (file.fail())
 	{
@@ -1297,8 +1364,16 @@ detector_array_T::detector_array_T(const char* filename)
 
 			t_handle[i].area = calc_area(t_handle[i].segs[0].point1,t_handle[i].segs[1].point1,t_handle[i].segs[1].point2)
 			+calc_area(t_handle[i].segs[0].point1,t_handle[i].segs[2].point1,t_handle[i].segs[2].point2);
+            if (strcmp(type.c_str(),"TRANSIENT")==0){
+				t_handle[i].estimates = new double[Nt];
+				for (int j = 0; j<Nt; j++){
+			        t_handle[i].estimates[j] = 0;
+				}
+			}
+			else {
+				t_handle[i].estimate = 0;
+			}
 
-			t_handle[i].estimate = 0;
 		}
 	}
 }
@@ -1306,15 +1381,75 @@ detector_array_T::detector_array_T(const char* filename)
 void detector_array_T::measure(particle * part, materials * mat)
 {
 	double cntrbt = 0;
-	point nrmlzd_seg; // point structure to store the coordinates of the normalized vector colinear with segment
 
+    if (strcmp(type.c_str(),"TRANSIENT")==0) {
+		// first, we need to spot all measurement times on the path between pt0 and pt1
+		int ilm=msr_index+1;
+		int inm;
+		double tpositions;
+		point pt;
+			//        cout << Vx1 << " " << Vy1 << " " << Vz1 << endl;
+/*
+			if (msr_times[ilm] < part->t + part->Dt){
+				inm=ilm;
+				while (inm-1 < Nt && msr_times[inm+1] < part->t + part->Dt ){
+					inm=inm+1;
+				}
+				for (int im=ilm; im<inm+1; im++){
+                    // calculate the positions in the phase space at the applicable measurement times
+					tpositions=msr_times[im];
+					pt.x = part->pt0.x + part->Vp0.x*(tpositions-part->t);
+					pt.y = part->pt0.y + part->Vp0.y*(tpositions-part->t);
+                    // check whether the particle would be in any of the detectors at these moments
+                    for (int i = 0; i<N; i++)
+                    {
+					    if (tpositions > part->t && inside_quad(pt, t_handle[i]) && im<Nt){
 
-	for (int i = 0; i<N; i++){ // go over all T detectors and analyze interaction with particle segment
-		if (overlap_quad(part->seg, t_handle[i])) {
-		    cntrbt = overlap_length(part->seg, t_handle[i]); //this just gives a length
-		    t_handle[i].estimate = t_handle[i].estimate + part->sig*part->weight*
-			cntrbt/t_handle[i].area/mat->C/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y); // IMPORTANT: SINCE IT IS 2D, DO NOT USE part->V for norm of velocity
-		}
+                            t_handle[i].estimates[im] = t_handle[i].estimates[im] + part->weight*part->sig/t_handle[i].area/mat->C;//exp(-2*dist_R2/R0/R0-beta*Zpositions)/N;
+
+					    }
+
+				    }
+				}
+				msr_index=inm;
+			}
+			if (part->t + part->Dt > msr_times[Nt-1])
+            {
+                msr_index = -1; // only for transient cases: reset the msr_index
+                part->alive = 0; // "kill" the particle
+            }
+*/
+        for (int j = 0; j<Nt; j++){
+            if (msr_times[j] >=part->t && msr_times[j] < part->t+part->Dt){
+                tpositions=msr_times[j];
+                pt.x = part->pt0.x + part->Vp0.x*(tpositions-part->t);
+					pt.y = part->pt0.y + part->Vp0.y*(tpositions-part->t);
+                    // check whether the particle would be in any of the detectors at these moments
+                    for (int i = 0; i<N; i++)
+                    {
+					    if (inside_quad(pt, t_handle[i])){
+
+                            t_handle[i].estimates[j] = t_handle[i].estimates[j] + part->weight*part->sig/t_handle[i].area/mat->C;
+
+					    }
+
+				    }
+            }
+        }
+        if (part->t + part->Dt > msr_times[Nt-1])
+            {
+                msr_index = -1; // only for transient cases: reset the msr_index
+                part->alive = 0; // "kill" the particle
+            }
+	}
+	else{
+	    for (int i = 0; i<N; i++){ // go over all T detectors and analyze interaction with particle segment
+		    if (overlap_quad(part->seg, t_handle[i])) {
+		        cntrbt = overlap_length(part->seg, t_handle[i]); //this just gives a length
+		        t_handle[i].estimate = t_handle[i].estimate + part->sig*part->weight*
+		    	cntrbt/t_handle[i].area/mat->C/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y); // IMPORTANT: SINCE IT IS 2D, DO NOT USE part->V for norm of velocity
+		    }
+	    }
 	}
 }
 
@@ -1332,7 +1467,17 @@ void detector_array_T::write(const char * filename)
 	ofstream file;
 	file.open(filename);
 	for (int i = 0; i<N ; i++){
-		file << t_handle[i].estimate << endl;
+        if (strcmp(type.c_str(),"TRANSIENT")==0){
+            for (int j = 0; j<Nt; j++)
+            {
+                file << t_handle[i].estimates[j];
+                file << " " ;
+            }
+            file << endl;
+        }
+        else{
+		    file << t_handle[i].estimate << endl;
+        }
 	}
 }
 
@@ -1347,12 +1492,15 @@ void detector_array_T::show_results()
 detector_array_T::~detector_array_T()
 {
 	delete[] t_handle;
+	if (msr_times!=NULL) {
+		delete[] msr_times;
+	}
 }
 
 class sources
 {
 public:
-	sources(materials * mat, prescribed_bdrs * presc, const char * vol, const char * bod, int NN); // vol and bod are respectively the name files of volumetric sources and body force sources
+	sources(materials * mat, prescribed_bdrs * presc, const char * vol, const char * bod, const char * init, int NN); // vol and bod are respectively the name files of volumetric sources and body force sources
 	~sources();
 	string type; //TRANSIENT or STEADY
 	double total_energy;
@@ -1364,9 +1512,12 @@ public:
 	prescribed_bdrs * ptr_to_presc;
 	volumetric * sprd_src_array; //pointer to array of volumetric sources
 	body_force * bd_frc_array; //pointer to array of body force types of sources
+	initial * initial_condition;
+
 	int Np; //number of prescribed sources
 	int Nv; // number of volumetric sources
 	int Nb; // number of body_force sources
+	int Ni; // number of sources associated with initial condition
 	int Ntot; //total number of separate sources
 	int Npart; // total number of particles to be simulated
 	materials * ptr_to_mat;
@@ -1375,6 +1526,7 @@ public:
 	void display_type(){cout << type << endl;} // to check if this is transient or steady simulation
 	void display_vol();
 	void display_bod();
+	void display_init();
 };
 
 sources::~sources(){
@@ -1384,14 +1536,16 @@ sources::~sources(){
 	delete[] source_type;
 	delete[] sprd_src_array;
 	delete[] bd_frc_array;
+	delete[] initial_condition;
 }
 
-sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, const char * bod, int NN) // constructor
+sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, const char * bod, const char * init, int NN) // constructor
 {
 
     Npart = NN;
 	//determine the type of simulation (transient of steady)
 	const char * filename_t = "times.txt";
+	int Ntimes;
 	ptr_to_mat = mat;
 	point pt1, pt2, pt3, pt4;
 	ifstream file;
@@ -1400,10 +1554,19 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 	{
 		cout << "no input file for times: this is a steady state calculation" << endl;
 		type = "STEADY";
+		Ni = 0;
 	}
 	else {
 		type = "TRANSIENT";
+		cout << "found input file for times. Estimates will be provided for times: " << endl;
+		file >> Ntimes ;
+		for (int i=0; i<Ntimes; i++) {
+			file >> t_max;
+			cout << t_max << " s" <<endl;
+		}
+		cout << "maximum simulation time: " << t_max << " s" << endl;
 	}
+	const char * local_type = type.c_str();
     file.close();
 	// pointer to the prescribed sources
 	ptr_to_presc = presc;
@@ -1508,37 +1671,114 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 	    }
 	}
 	file.close();
+    //read and define body forces
+	file.open(init);
+	if (file.fail()){
+		Ni = 0;
+		initial_condition = NULL;
+	}
+	else
+    {
+	    file >> Ni; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
+	    initial_condition = new initial[Ni];
+	    for (int i = 0; i<Ni; i++){
+		    file >> initial_condition[i].segs[0].point1.x;
+			file >> initial_condition[i].segs[0].point1.y;
 
+			file >> initial_condition[i].segs[1].point1.x;
+			file >> initial_condition[i].segs[1].point1.y;
+
+			file >> initial_condition[i].segs[2].point1.x;
+			file >> initial_condition[i].segs[2].point1.y;
+
+			file >> initial_condition[i].segs[3].point1.x;
+			file >> initial_condition[i].segs[3].point1.y;
+
+			file >> initial_condition[i].temp;
+			file >> initial_condition[i].temp_eq;
+
+			initial_condition[i].segs[0].point2.x = initial_condition[i].segs[1].point1.x;
+			initial_condition[i].segs[0].point2.y = initial_condition[i].segs[1].point1.y;
+
+			initial_condition[i].segs[1].point2.x = initial_condition[i].segs[2].point1.x;
+			initial_condition[i].segs[1].point2.y = initial_condition[i].segs[2].point1.y;
+
+			initial_condition[i].segs[2].point2.x = initial_condition[i].segs[3].point1.x;
+			initial_condition[i].segs[2].point2.y = initial_condition[i].segs[3].point1.y;
+
+			initial_condition[i].segs[3].point2.x = initial_condition[i].segs[0].point1.x;
+			initial_condition[i].segs[3].point2.y = initial_condition[i].segs[0].point1.y;
+
+			// calculate area
+			initial_condition[i].area = calc_area(initial_condition[i].segs[0].point1,initial_condition[i].segs[1].point1,initial_condition[i].segs[1].point2)
+			+calc_area(initial_condition[i].segs[0].point1,initial_condition[i].segs[2].point1,initial_condition[i].segs[2].point2);
+
+			// center of the shape
+			initial_condition[i].center.x = (initial_condition[i].segs[0].point1.x + initial_condition[i].segs[1].point1.x
+										  + initial_condition[i].segs[2].point1.x + initial_condition[i].segs[3].point1.x)/4;
+			initial_condition[i].center.y = (initial_condition[i].segs[0].point1.y + initial_condition[i].segs[1].point1.y
+										  + initial_condition[i].segs[2].point1.y + initial_condition[i].segs[3].point1.y)/4;
+	    }
+	}
+	file.close();
 	// total number of sources
-	Ntot = Np+Nv+Nb;
+	Ntot = Np + Nv + Nb + Ni;
 	// array to store the energies
 	energies = new double[Ntot];
 	source_type = new int[Ntot];
 	// define energies associated with prescribed boundaries
 	for (int i=0; i<Np; i++)
 	{
-		energies[i] = mat->cumul_CV[mat->Nm-1]*(ptr_to_presc->presc_handle[i].length)*
-		(ptr_to_presc->presc_handle[i].temp-ptr_to_presc->presc_handle[i].temp_eq)/4;
+		if (strcmp(local_type,"TRANSIENT")==0) {
+			energies[i] = mat->cumul_CV[mat->Nm-1]*(ptr_to_presc->presc_handle[i].length)*
+			(ptr_to_presc->presc_handle[i].temp-ptr_to_presc->presc_handle[i].temp_eq)/4*t_max;
+		}
+		else
+		{
+		    energies[i] = mat->cumul_CV[mat->Nm-1]*(ptr_to_presc->presc_handle[i].length)*
+		    (ptr_to_presc->presc_handle[i].temp-ptr_to_presc->presc_handle[i].temp_eq)/4;
+		}
 		source_type[i] = 1;
 		cout << "energy of " << i << " : " << energies[i] << endl;
 	}
 	// define energies associated with volumetric heating
 	for (int i=Np; i<Np+Nv; i++)
 	{
-		energies[i] = mat->cumul_C[mat->Nm-1]*(sprd_src_array[i-Np].area)*
-		(sprd_src_array[i-Np].temp-sprd_src_array[i-Np].temp_eq);
+		if (strcmp(local_type,"TRANSIENT")==0) {
+			energies[i] = mat->cumul_C[mat->Nm-1]*(sprd_src_array[i-Np].area)*
+		    (sprd_src_array[i-Np].temp-sprd_src_array[i-Np].temp_eq)*t_max;
+		}
+		else{
+		    energies[i] = mat->cumul_C[mat->Nm-1]*(sprd_src_array[i-Np].area)*
+		    (sprd_src_array[i-Np].temp-sprd_src_array[i-Np].temp_eq);
+		}
 		source_type[i] = 2;
 		cout << "energy of " << i << " : " << energies[i] << endl;
 	}
 	// define energies associated with body force
-	for (int i=Np+Nv; i<Ntot; i++)
+	for (int i=Np+Nv; i<Nv+Np+Nb; i++)
 	{
-		energies[i] = mat->cumul_CV[mat->Nm-1]*(bd_frc_array[i-Np-Nv].area)*
-		sqrt(bd_frc_array[i-Np-Nv].vctr.x*bd_frc_array[i-Np-Nv].vctr.x+bd_frc_array[i-Np-Nv].vctr.y*bd_frc_array[i-Np-Nv].vctr.y)/2;
+		if (strcmp(local_type,"TRANSIENT")==0) {
+			energies[i] = mat->cumul_CV[mat->Nm-1]*(bd_frc_array[i-Np-Nv].area)*
+		    sqrt(bd_frc_array[i-Np-Nv].vctr.x*bd_frc_array[i-Np-Nv].vctr.x+bd_frc_array[i-Np-Nv].vctr.y*bd_frc_array[i-Np-Nv].vctr.y)/2*t_max;
+		}
+		else{
+		    energies[i] = mat->cumul_CV[mat->Nm-1]*(bd_frc_array[i-Np-Nv].area)*
+		    sqrt(bd_frc_array[i-Np-Nv].vctr.x*bd_frc_array[i-Np-Nv].vctr.x+bd_frc_array[i-Np-Nv].vctr.y*bd_frc_array[i-Np-Nv].vctr.y)/2;
+		}
 		source_type[i] = 3;
 		cout << "energy of " << i << " : " << energies[i] << endl;
 	}
-
+	if (strcmp(local_type,"TRANSIENT")==0) {
+		for (int i=Np+Nv+Nb; i<Ntot; i++)
+		{
+			energies[i] = mat->cumul_C[mat->Nm-1]*(initial_condition[i-Np-Nv-Nb].area)*
+			(initial_condition[i-Np-Nv-Nb].temp-initial_condition[i-Np-Nv-Nb].temp_eq);
+			source_type[i] = 4;
+			cout << "energy of " << i << " : " << energies[i] << endl;
+		}
+	}
+    // define energies associated with initial condition
 
 	// calculate and store the absolute cumulative energies
 	cumul_energies = new double[Ntot];
@@ -1593,6 +1833,21 @@ void sources::display_bod(){
 	}
 }
 
+void sources::display_init(){
+    for (int i=0; i<Ni; i++)
+	{
+		cout << initial_condition[i].segs[0].point1.x << " " << initial_condition[i].segs[0].point1.y << " "
+		<< initial_condition[i].segs[0].point2.x << " " << initial_condition[i].segs[0].point2.y << " "
+		<< initial_condition[i].segs[1].point1.x << " " << initial_condition[i].segs[1].point1.y << " "
+		<< initial_condition[i].segs[1].point2.x << " " << initial_condition[i].segs[1].point2.y << " "
+		<< initial_condition[i].segs[2].point1.x << " " << initial_condition[i].segs[2].point1.y << " "
+		<< initial_condition[i].segs[2].point2.x << " " << initial_condition[i].segs[2].point2.y << " "
+		<< initial_condition[i].segs[3].point1.x << " " << initial_condition[i].segs[3].point1.y << " "
+		<< initial_condition[i].segs[3].point2.x << " " << initial_condition[i].segs[3].point2.y << " " << endl;
+		cout << initial_condition[i].area << " " << initial_condition[i].center.x << " " <<  initial_condition[i].center.y << endl;
+	}
+}
+
 void sources::emit(particle * part, RandomClass * r) // updates properties of part to make it emitted by the sources
 {
 	int index_s = choose(r, N_cumul, Ntot);
@@ -1620,6 +1875,8 @@ void sources::emit(particle * part, RandomClass * r) // updates properties of pa
 		R = r->randu(); phi = 2*PI*r->randu(); Vx = sqrt(R)*part->V; Vy = sqrt(1-R)*part->V*cos(phi);
 		part->Vp0.x = nx*Vx-ny*Vy;
 		part->Vp0.y = ny*Vx+nx*Vy;
+		// draw initial time
+		part->t = t_max*r->randu();
 	}
 	else {
 		if (index_s<Np+Nv)
@@ -1633,12 +1890,13 @@ void sources::emit(particle * part, RandomClass * r) // updates properties of pa
 			phi = 2*PI*r->randu();
 			part->Vp0.x = (part->V)*R; // velocity (2D vector)
 			part->Vp0.y = (part->V)*sqrt(1-R*R)*cos(phi);
-
+            // draw initial time
+			part->t = t_max*r->randu();
 
 
 		}
 		else {
-			if (index_s<Ntot) {
+			if (index_s<Np+Nv+Nb) {
 				// emission from body force source
 				// if we fall in that case, we need to redefine the sign
 				R = r->randu();
@@ -1665,14 +1923,30 @@ void sources::emit(particle * part, RandomClass * r) // updates properties of pa
 				Vy = part->sig*(part->V)*sqrt(1-R)*cos(phi);
 				part->Vp0.x = nx*Vx-ny*Vy;
 				part->Vp0.y = ny*Vx+nx*Vy;
+				// draw initial time
+				part->t = t_max*r->randu();
 			}
 			else {
-				cout << "In sources::emit, chosen index not within the expected range" << endl;
-				abort();
+				if (index_s<Ntot)
+				{
+					// emission from initial condition
+					//draw position
+					part->pt0 = emit_from_quadrilater(initial_condition[index_s-Np-Nv-Nb], r);
+					//draw mode index
+					index_m = choose(r, ptr_to_mat->N_cumul_C, ptr_to_mat->Nm); // Here we consider that the initial distribution is a Bose-Einstein
+					part->V = ptr_to_mat->VG[index_m];
+					R = 2*r->randu()-1;
+					phi = 2*PI*r->randu();
+					part->Vp0.x = (part->V)*R; // velocity (2D vector)
+					part->Vp0.y = (part->V)*sqrt(1-R*R)*cos(phi);
+					part->t = 0; // time is zero if emitted from initial source
+				}
+				else {
+					cout << "In sources::emit, chosen index not within the expected range" << endl;
+					abort();
+				}
 			}
-
 		}
-
 	}
     //assign the rest of the particle properties
 	part->mode_index = index_m;
@@ -1725,25 +1999,31 @@ int main()
 	// READ MATERIAL PROPERTIES
 	materials Si("dataSi.txt", TEQ);
 	Si.show_all();
-	
+
 	// READ SOURCE FILES
-	sources src(&Si, &presc, "volumetric.txt", "body_force.txt",NPARTICLES);
+	sources src(&Si, &presc, "volumetric.txt", "body_force.txt", "initial.txt", NPARTICLES);
+	src.display_type();
+	cout << src.Np << endl;
+	cout << src.Nv << endl;
+	src.display_vol();
+	src.display_bod();
+	src.display_init();
 
     particle part(MAXIMUM_COLL);
 
 	// DECLARE AND READ THE HEAT FLUX AND TEMPERATURE DETECTORS
 	detector_array_H H_detect("H_detectors.txt");
-	detector_array_T T_detect("T_detectors.txt");
+	detector_array_T T_detect("T_detectors.txt", "times.txt");
 	H_detect.show();
 	cout << endl;
 	T_detect.show();
-    
+
 	// LOOP OVER PARTICLES
 	for (int i=0; i<src.Npart; i++){
 
 
 		src.emit(&part,&r);
-
+  //     cout << part.t << " " << src.t_max << endl;
 		while (part.alive){
 
             part.initiate_move(&r);
