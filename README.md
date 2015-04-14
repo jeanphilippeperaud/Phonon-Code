@@ -28,7 +28,15 @@ There are three source files. Each of them define sources that are spreads throu
 <b> Note: </b> while the regions are primarily coded as quadrilateral, triangles might be used as well. To do so, one just have to define a quadrialeral with two identical points.
 
 <h3>- Detectors </h3>
+Detectors are of two types: temperature detectors and heat flux detectors. They are respectively defined by the files "T_detectors.txt" and "H_detectors.txt". Both files follow the same structure as previously, in the sense that the first number defines the number of such detectors and the following lines define quadrilaterals that define 2D regions. Each estimate is therefore a spatial average over the defined region. In the case of "H_detectors.txt", the basic 8 quadrilater coordinates are completed with two further coordinates. These two coordinates define the vector refering to the components over which the heat flux is projected. For instance, in order to obtain the y-component of the heat flux, these two numbers must be "0 1". In order to obtain the x-component, it must be "1 0".
+
+There is a third detector file called "times.txt". This file refers to the measurement times of the detectors, for transient cases. <b> In order to run a transient calculation, this file must be included in the same folder as the executable. In order to run a steady state calculation, this file must be removed.</b> The first entry of this file must be the number of measurement times. The following entries are the measurement times.
 
 # Output format
+In this version, the code produces two files:
+- "results_T.txt" returns the temperature estimates.
+- "results_H.txt" returns the heat flux estimates.
+
+In both cases, the estimates appear as a single column if the calculation is steady state. If the calculation is transient, then each column correspond to a measurement time.
 
 # Troubleshoot, frequent mistakes and comments
