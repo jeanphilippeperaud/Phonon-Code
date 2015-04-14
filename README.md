@@ -7,11 +7,13 @@ In the present version, the user specifies the geometry, the source terms, the "
 # Input files
 The input files are all .txt format. They can be ranked in four categories: base, geometry, sources and detectors. In the current version, the names of the input files should not be changed (only the contents should be adapted by the user).
 
-<h3> - Base input file </h3>
+<h3> - Base input files </h3>
 The input file named "input.txt" is just used for specifying:
 - The number of particles to be used (first entry)
 - The maximum number of collision events that a particle can undergo. By "collision", we mean here any "randomizing event", namely, a scattering event or a diffuse reflection on a boundary. This number is necessary only for <b> steady state </b> calculations <b>with no absorption term</b>, where particles need a termination criterion. Typically, this is the case for the study of 2D periodic systems. In other cases, particle trajectories get "naturally" terminated when they exit the system through absorbing boundaries or because the maximum estimate time has been reached.
 - Reference temperature for linearizing the system
+
+The second base input file specifies te material properties. In this version, we provide the properties (assumed isotropic) for silicon. The file is named "dataSi.txt". The first line defines the number of frequency cells. The following lines describe the properties for each of these cells, in the following order: radial frequency - density of states - group velocity - "Delta" of frequency (width of the frequency cell) - relaxation time - polarization . The polarization is coded by 1 for LA, 2 for TA.
 
 <h3>- Geometry files</h3>
 As to now, there are three geometry files, each corresponding to a type of boundary condition: "prescribed.txt" (handling prescribed temperature walls, sometimes otherwise called isothermal walls), "periodic.txt" (handling periodic boundary conditions), "reflective.txt" (handling reflective boundaries). Each boundary is implemented as an <b> oriented </b> segment. The orientation of the segment (let's call it vector s) is such that, if vector n is its normal pointing inward the system, s and n must form a direct basis, in the sense that their determinant is positive. Please refer to the provided example files.
