@@ -33,7 +33,7 @@
 
 #define multiply(a,b) a*b
 using namespace std;
-int PI = 3.14159265;
+double PI = 3.14159265;
 
 struct point{
     double x;
@@ -861,7 +861,7 @@ void particle::initiate_move(RandomClass * r)
 	seg.point1.y = pt0.y;
 	seg.point2.x = pt1.x;
 	seg.point2.y = pt1.y;
-	seg.length = Dt*V;
+	seg.length = Dt*sqrt(Vp0.x*Vp0.x+Vp0.y*Vp0.y); // DO NOT USE V BECAUSE 2D
 }
 
 void particle::move(reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdrs * per)
@@ -1103,10 +1103,12 @@ body_force::body_force(point pt1, point pt2, point pt3, point pt4, point grad)
 class detector_H: public quadrilater
 {
 public:
-	detector_H(){};
+	detector_H(){estimates = NULL;};
+	~detector_H();
 	detector_H(point pt1, point pt2, point pt3, point pt4, point grad);
 	point vctr;
 	double estimate;
+	double * estimates;
 };
 
 detector_H::detector_H(point pt1, point pt2, point pt3, point pt4, point grad) // grad is the "imposed" temperature gradient
@@ -1137,6 +1139,13 @@ detector_H::detector_H(point pt1, point pt2, point pt3, point pt4, point grad) /
     center.y = (pt1.y + pt2.y + pt3.y + pt4.y)/4;
 
     estimate = 0;
+}
+
+detector_H::~detector_H()
+{
+	if (estimates!=NULL) {
+		delete[] estimates;
+	}
 }
 
 class detector_T: public quadrilater
@@ -1185,20 +1194,40 @@ detector_T::~detector_T()
 
 class detector_array_H { // class that handles and stores the heat flux detectors
 public:
-	detector_array_H(const char* filename);
+	detector_array_H(const char* filename, const char * filename_time);
 	~detector_array_H();
 	void measure(particle * part); // updates all heat flux detectors from particle trajectory
 	int N; // TOTAL number of heat flux detectors
+	int Nt;
+	string type; // TRANSIENT or STEADY
 	detector_H * h_handle; // pointer towards an array of heat flux detectors
+	double * msr_times;
+	int msr_index;
 	void show(); //displays all heat flux detectors
 	void show_results(); // displays all heat flux results
 	void write(const char* filename); // writes all heat flux results in a file
 };
 
-detector_array_H::detector_array_H(const char* filename)
+detector_array_H::detector_array_H(const char* filename, const char * filename_time)
 {
-	ifstream file;
+	ifstream file, filetime;
 	file.open(filename);
+	filetime.open(filename_time);
+	if (filetime.fail()) {
+		Nt = 0;
+		type = "STEADY";
+		msr_times = NULL;
+	}
+	else{
+		type = "TRANSIENT";
+		filetime >> Nt;
+		msr_times = new double[Nt];
+		msr_index = -1;
+		for (int i = 0; i<Nt; i++)
+		{
+			filetime >> msr_times[i];
+		}
+	}
 	double vx, vy;
 	if (file.fail())
 	{
@@ -1236,6 +1265,15 @@ detector_array_H::detector_array_H(const char* filename)
 			+calc_area(h_handle[i].segs[0].point1,h_handle[i].segs[2].point1,h_handle[i].segs[2].point2);
 
 			h_handle[i].estimate = 0;
+			if (strcmp(type.c_str(),"TRANSIENT")==0){
+				h_handle[i].estimates = new double[Nt];
+				for (int j = 0; j<Nt; j++){
+			        h_handle[i].estimates[j] = 0;
+				}
+			}
+			else {
+				h_handle[i].estimate = 0;
+			}
 		}
 	}
 }
@@ -1264,35 +1302,111 @@ void detector_array_H::show_results()
 	}
 }
 
+
 detector_array_H::~detector_array_H()
 {
 	delete[] h_handle;
+	if (msr_times!=NULL) {
+		delete[] msr_times;
+	}
 }
 
 void detector_array_H::measure(particle * part)
 {
 	double cntrbt = 0;
-	point nrmlzd_seg; // point structure to store the coordinates of the normalized vector colinear with segment
-	nrmlzd_seg.x = (part->seg.point2.x - part->seg.point1.x)/
-	sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
-	nrmlzd_seg.y = (part->seg.point2.y - part->seg.point1.y)/
-	sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
 
-	for (int i = 0; i<N; i++){ // go over all H detectors and analyze interaction with particle segment
-		if (overlap_quad(part->seg, h_handle[i])) {
-		    cntrbt = overlap_length(part->seg, h_handle[i]); //this just gives a length
-		    cntrbt = cntrbt*(nrmlzd_seg.x*h_handle[i].vctr.x + nrmlzd_seg.y*h_handle[i].vctr.y); // projects to the desired component
-		    h_handle[i].estimate = h_handle[i].estimate + part->sig*part->weight*cntrbt/h_handle[i].area;
-		}
+	if (strcmp(type.c_str(),"TRANSIENT")==0) {
+		// first, we need to spot all measurement times on the path between pt0 and pt1
+		int ilm=msr_index+1;
+		int inm;
+		double tpositions;
+		point pt;
+
+			//        cout << Vx1 << " " << Vy1 << " " << Vz1 << endl;
+/*
+			if (msr_times[ilm] < part->t + part->Dt){
+				inm=ilm;
+				while (inm-1 < Nt && msr_times[inm+1] < part->t + part->Dt ){
+					inm=inm+1;
+				}
+				for (int im=ilm; im<inm+1; im++){
+                    // calculate the positions in the phase space at the applicable measurement times
+					tpositions=msr_times[im];
+					pt.x = part->pt0.x + part->Vp0.x*(tpositions-part->t);
+					pt.y = part->pt0.y + part->Vp0.y*(tpositions-part->t);
+                    // check whether the particle would be in any of the detectors at these moments
+                    for (int i = 0; i<N; i++)
+                    {
+					    if (tpositions > part->t && inside_quad(pt, t_handle[i]) && im<Nt){
+
+                            t_handle[i].estimates[im] = t_handle[i].estimates[im] + part->weight*part->sig/t_handle[i].area/mat->C;//exp(-2*dist_R2/R0/R0-beta*Zpositions)/N;
+
+					    }
+
+				    }
+				}
+				msr_index=inm;
+			}
+			if (part->t + part->Dt > msr_times[Nt-1])
+            {
+                msr_index = -1; // only for transient cases: reset the msr_index
+                part->alive = 0; // "kill" the particle
+            }
+*/
+        for (int j = 0; j<Nt; j++){
+            if (msr_times[j] >=part->t && msr_times[j] < part->t+part->Dt){
+                tpositions=msr_times[j];
+                pt.x = part->pt0.x + part->Vp0.x*(tpositions-part->t);
+                pt.y = part->pt0.y + part->Vp0.y*(tpositions-part->t);
+                // check whether the particle would be in any of the detectors at these moments
+                for (int i = 0; i<N; i++)
+                {
+                    if (inside_quad(pt, h_handle[i])){
+                        h_handle[i].estimates[j] = h_handle[i].estimates[j] + part->weight*part->sig/h_handle[i].area*(h_handle[i].vctr.x*part->Vp0.x+h_handle[i].vctr.y*part->Vp0.y);
+				    }
+
+                }
+            }
+        }
+        if (part->t + part->Dt > msr_times[Nt-1])
+            {
+                msr_index = -1; // only for transient cases: reset the msr_index
+                part->alive = 0; // "kill" the particle
+            }
+	}
+	else{
+        point nrmlzd_seg; // point structure to store the coordinates of the normalized vector colinear with segment
+	    nrmlzd_seg.x = (part->seg.point2.x - part->seg.point1.x)/
+	    sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
+	    nrmlzd_seg.y = (part->seg.point2.y - part->seg.point1.y)/
+	    sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
+
+	    for (int i = 0; i<N; i++){ // go over all H detectors and analyze interaction with particle segment
+		    if (overlap_quad(part->seg, h_handle[i])) {
+		        cntrbt = overlap_length(part->seg, h_handle[i]); //this just gives a length
+		        cntrbt = cntrbt*(nrmlzd_seg.x*h_handle[i].vctr.x + nrmlzd_seg.y*h_handle[i].vctr.y); // projects to the desired component
+		        h_handle[i].estimate = h_handle[i].estimate + part->sig*part->weight*cntrbt/h_handle[i].area;
+		    }
+	    }
 	}
 }
 
 void detector_array_H::write(const char* filename)
 {
-	ofstream file;
+    ofstream file;
 	file.open(filename);
 	for (int i = 0; i<N ; i++){
-		file << h_handle[i].estimate << endl;
+        if (strcmp(type.c_str(),"TRANSIENT")==0){
+            for (int j = 0; j<Nt; j++)
+            {
+                file << h_handle[i].estimates[j];
+                file << " " ;
+            }
+            file << endl;
+        }
+        else{
+		    file << h_handle[i].estimate << endl;
+        }
 	}
 }
 
@@ -1423,17 +1537,17 @@ void detector_array_T::measure(particle * part, materials * mat)
             if (msr_times[j] >=part->t && msr_times[j] < part->t+part->Dt){
                 tpositions=msr_times[j];
                 pt.x = part->pt0.x + part->Vp0.x*(tpositions-part->t);
-					pt.y = part->pt0.y + part->Vp0.y*(tpositions-part->t);
-                    // check whether the particle would be in any of the detectors at these moments
-                    for (int i = 0; i<N; i++)
-                    {
-					    if (inside_quad(pt, t_handle[i])){
+                pt.y = part->pt0.y + part->Vp0.y*(tpositions-part->t);
+                // check whether the particle would be in any of the detectors at these moments
+                for (int i = 0; i<N; i++)
+                {
+                    if (inside_quad(pt, t_handle[i])){
 
-                            t_handle[i].estimates[j] = t_handle[i].estimates[j] + part->weight*part->sig/t_handle[i].area/mat->C;
-
-					    }
+                        t_handle[i].estimates[j] = t_handle[i].estimates[j] + part->weight*part->sig/t_handle[i].area/mat->C;
 
 				    }
+
+                }
             }
         }
         if (part->t + part->Dt > msr_times[Nt-1])
@@ -1919,8 +2033,8 @@ void sources::emit(particle * part, RandomClass * r) // updates properties of pa
 				part->V = ptr_to_mat->VG[index_m];
 				R = r->randu();
 				phi = 2*PI*r->randu();
-				Vx = part->sig*(part->V)*sqrt(R); // velocity (2D vector)
-				Vy = part->sig*(part->V)*sqrt(1-R)*cos(phi);
+				Vx = part->-sig*(part->V)*sqrt(R); // velocity (2D vector); //"-" sign because the body force is opposite to imposed temperature gradient
+				Vy = part->-sig*(part->V)*sqrt(1-R)*cos(phi);
 				part->Vp0.x = nx*Vx-ny*Vy;
 				part->Vp0.y = ny*Vx+nx*Vy;
 				// draw initial time
@@ -1962,7 +2076,10 @@ void sources::emit(particle * part, RandomClass * r) // updates properties of pa
 
  }
  */
-
+double fl(double x, double LX, int N) // "modulo" function (for debugging purpose)
+{
+    return x-floor(x/LX)*LX;
+}
 
 
 int main()
@@ -2005,14 +2122,17 @@ int main()
 	src.display_type();
 	cout << src.Np << endl;
 	cout << src.Nv << endl;
+    cout << src.Nb << endl;
+	cout << src.Ni << endl;
 	src.display_vol();
 	src.display_bod();
 	src.display_init();
 
+
     particle part(MAXIMUM_COLL);
 
 	// DECLARE AND READ THE HEAT FLUX AND TEMPERATURE DETECTORS
-	detector_array_H H_detect("H_detectors.txt");
+	detector_array_H H_detect("H_detectors.txt", "times.txt");
 	detector_array_T T_detect("T_detectors.txt", "times.txt");
 	H_detect.show();
 	cout << endl;
@@ -2025,17 +2145,16 @@ int main()
 		src.emit(&part,&r);
   //     cout << part.t << " " << src.t_max << endl;
 		while (part.alive){
-
             part.initiate_move(&r);
 
             part.move(&ref, &presc, &per);
 
 			H_detect.measure(&part);
 			T_detect.measure(&part, &Si);
+
             part.finish_move(&Si,&r, &ref, &presc, &per);
 
 		}
-
 
 	}
     // DISPLAY RESULTS IN TERMINAL AND RECORD THEM
@@ -2043,7 +2162,6 @@ int main()
 	H_detect.write("results_H.txt");
 	T_detect.show_results();
 	T_detect.write("results_T.txt");
-
 
 	return 0;
 
