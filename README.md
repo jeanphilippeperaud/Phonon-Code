@@ -6,3 +6,4 @@ In the present version, the user specifies the geometry, the source terms, the "
 
 # Input files
 The input files are all .txt format. They can be ranked in three categories: geometry, sources and detectors.
+<h4> geometry </h4>
