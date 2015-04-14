@@ -9,6 +9,6 @@ The input files are all .txt format. They can be ranked in three categories: geo
 <h3>- Geometry files</h3>
 As to now, there are three geometry files, each corresponding to a type of boundary condition: "prescribed.txt" (handling prescribed temperature walls, sometimes otherwise called isothermal walls), "periodic.txt" (handling periodic boundary conditions), "reflective.txt" (handling reflective boundaries).
 
-<h3> Source files </h3>
+<h3>- Source files </h3>
 
-<h3> Detectors </h3>
+<h3>- Detectors </h3>
