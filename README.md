@@ -6,7 +6,8 @@ In the present version, the user specifies the geometry, the source terms, the "
 
 # Compiling and runnning
 Executables are provided in this release. If it doesn't work you will have to compile the file "forward_MC.cpp".
-To compile, you will need to include a path to the boost library. Here is a URL: https://www.dropbox.com/sh/0vx58yglpijt3u2/AAD3fwT4B5Mfy6MeYoisXH2xa?dl=0 .
+To compile, you will need to include a path to the boost library. Here is a URL for downloading the library: https://www.dropbox.com/sh/0vx58yglpijt3u2/AAD3fwT4B5Mfy6MeYoisXH2xa?dl=0 .
+Once compiled, you may run Example 1 by placing the executable in the Example 1 folder and running it from there. The calculation will produce two files (results_T.txt and results_H.txt) as outputs.
 
 
 # Input files
