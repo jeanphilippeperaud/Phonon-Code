@@ -9,7 +9,7 @@ modification, are permitted provided that the following conditions are met:
     * Redistributions in binary form must reproduce the above copyright
       notice, this list of conditions and the following disclaimer in the
       documentation and/or other materials provided with the distribution.
-    * Neither the name of the owner nor the
+    * Neither the name of the <organization> nor the
       names of its contributors may be used to endorse or promote products
       derived from this software without specific prior written permission.
 
@@ -73,7 +73,7 @@ struct point{
 double det(double ax, double ay, double bx, double by)
 {
 	if (ax*by-ay*bx>1) {
-		cout << "in det: too large: " << ax << " " << ay << " " << bx << " " << by << endl;
+	//	cout << "in det: too large: " << ax << " " << ay << " " << bx << " " << by << endl;
 	}
     return ax*by-ay*bx;
 }
@@ -2111,6 +2111,13 @@ double fl(double x, double LX, int N) // "modulo" function (for debugging purpos
     return x-floor(x/LX)*LX;
 }
 
+void print_percent(int N, int Npart)
+{
+    if ((100*N)/Npart==((double)100*N/Npart))
+        cout << (100*N)/Npart << "% completed" << endl;
+
+
+}
 
 int main()
 {
@@ -2170,7 +2177,7 @@ int main()
 
 	// LOOP OVER PARTICLES
 	for (int i=0; i<src.Npart; i++){
-
+    print_percent(i, src.Npart);
 
 		src.emit(&part,&r);
   //     cout << part.t << " " << src.t_max << endl;
