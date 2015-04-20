@@ -48,4 +48,5 @@ In this version, the code produces two files:
 In both cases, the estimates appear as a single column if the calculation is steady state. If the calculation is transient, then each column correspond to a measurement time.
 
 # Troubleshoot, frequent mistakes and comments
-(to be done)
+
+It is advised to double check if the geometry is well defined and if all boundaries coherently assemble to define the compuational domain. The latest update of the source file Forward_MC.cpp includes a small function which outputs a "geometry.m" file which the user can run in matlab and which will plot the geometry that was entered in the simulation. With this tool, one may check the correct spatial definition of the boundaries, sources and detectors.
