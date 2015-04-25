@@ -38,7 +38,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // - prescribed_bdrs: reads and stores all prescribed temperature boundaries
 // - periodic_bdrs: reads and stores all periodic boundaries
 // - materials: stores the material properties
-// - sources
+// - sources: handle source term for transient or steady cases. Also supports forward or adjoint calculations.
+// - detector_T: elementary class for defining temperature detector
+// - detector_H: elementary class for defining heat flux detector
+// - detector_T_flat: elementary class for defining "flat" temperature detector. Useful especially for adjoint calculations
+//
 
 // functions:
 // -det: calculated determinant between two vectors
@@ -59,6 +63,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <ctime>
 #include <math.h>
+#include <ctype.h>
 #include "randomClass.h"
 
 #define multiply(a,b) a*b
@@ -73,7 +78,7 @@ struct point{
 double det(double ax, double ay, double bx, double by)
 {
 	if (ax*by-ay*bx>1) {
-	//	cout << "in det: too large: " << ax << " " << ay << " " << bx << " " << by << endl;
+//		cout << "in det: too large: " << ax << " " << ay << " " << bx << " " << by << endl;
 	}
     return ax*by-ay*bx;
 }
@@ -1222,6 +1227,34 @@ detector_T::~detector_T()
 	}
 }
 
+//THIS CLASS IS NOT VERY USEFUL FOR NOW
+class detector_T_flat: public segment
+{
+public:
+	detector_T_flat(){};
+	~detector_T_flat();
+	detector_T_flat(double x0, double y0, double x1, double y1, double T, double Teq);
+	double coeff; // this coefficient will just be the different T-Teq when this is an adjoint detector
+};
+
+detector_T_flat::detector_T_flat(double x0, double y0, double x1, double y1, double T, double Teq)
+{
+    // assign points to constitutive segment
+    point1.x = x0;
+	point1.y = y0;
+	point2.x = x0;
+	point2.y = y0;
+
+	coeff = T - Teq;
+
+
+}
+
+detector_T_flat::~detector_T_flat()
+{
+
+}
+
 class detector_array_H { // class that handles and stores the heat flux detectors
 public:
 	detector_array_H(const char* filename, const char * filename_time);
@@ -1326,6 +1359,8 @@ void detector_array_H::show()
 
 void detector_array_H::show_results()
 {
+    if (N>0)
+        cout << "Showing heat flux estimates: " << endl;
 	for (int i = 0; i<N ; i++){
 		cout << h_handle[i].estimate << endl;
 
@@ -1627,6 +1662,8 @@ void detector_array_T::write(const char * filename)
 
 void detector_array_T::show_results()
 {
+    if (N>0)
+        cout << "Showing temperature estimates: " << endl;
 	for (int i = 0; i<N ; i++){
 		cout << t_handle[i].estimate << endl;
 
@@ -1645,11 +1682,14 @@ class sources
 {
 public:
 	sources(materials * mat, prescribed_bdrs * presc, const char * vol, const char * bod, const char * init, int NN); // vol and bod are respectively the name files of volumetric sources and body force sources
+	sources(materials * mat, const char * T_det, const char * H_det, int NN); // overloaded constructor for handling the adjoint case
 	~sources();
 	string type; //TRANSIENT or STEADY
+	string F_or_B; //FORWARD or BACWARD (adjoint)
 	double total_energy;
 	double t_max;  // maximum time (for TRANSIENT only)
 	double * energies; // individual weights of each source
+	int * remaining_particles; // for the ADJOINT version, a counter is implemented for each adjoint source. Exactly Npart particles are emitted from EACH source
 	double * cumul_energies; // same, but cumulative
 	double * N_cumul; // same, but normalized
 	int * source_type; // for determining from which source to emit 1 = prescribed temperature wall; 2 = volumetric heating; 3 = body force induced by temperature gradient
@@ -1657,7 +1697,8 @@ public:
 	volumetric * sprd_src_array; //pointer to array of volumetric sources
 	body_force * bd_frc_array; //pointer to array of body force types of sources
 	initial * initial_condition;
-
+	int src_parser; //indicates which adjoint source we are currently treating
+    bool not_empty; // switches to false when src_parser reaches the number of adjoint sources and the corresponding remaining particles become zero
 	int Np; //number of prescribed sources
 	int Nv; // number of volumetric sources
 	int Nb; // number of body_force sources
@@ -1667,6 +1708,8 @@ public:
 	materials * ptr_to_mat;
 
 	void emit(particle * part, RandomClass * r); // returns a particle sampled from the sources
+	void emit_adjoint(particle * part, RandomClass * r); // return a particle sampled from the adjoint sources (detectors). This should only be used if the
+	                                                      // proper constructor (overloaded for adjoint simulations) has been called
 	void display_type(){cout << type << endl;} // to check if this is transient or steady simulation
 	void display_vol();
 	void display_bod();
@@ -1687,6 +1730,8 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 {
 
     Npart = NN;
+    // The use of this constructor means the use of a "forward" simulation technique
+    F_or_B = "FORWARD";
 	//determine the type of simulation (transient of steady)
 	const char * filename_t = "times.txt";
 	int Ntimes;
@@ -1815,7 +1860,7 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 	    }
 	}
 	file.close();
-    //read and define body forces
+    //read and define initial conditions
 	file.open(init);
 	if (file.fail()){
 		Ni = 0;
@@ -1944,8 +1989,295 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 	}
 }
 
+sources::sources(materials * mat, const char * T_det, const char * H_det, int NN) // constructor
+{
+	// this constructor will use link the detectors to the sources (adjoint)
+    Npart = NN;
+
+    F_or_B = "BACKWARD";
+	//determine the type of simulation (transient of steady)
+	const char * filename_t = "times.txt";
+	int Ntimes;
+	ptr_to_mat = mat;
+	point pt1, pt2, pt3, pt4;
+	ifstream file;
+	file.open(filename_t);
+	if (file.fail())
+	{
+		cout << "no input file for times: this is a steady state calculation" << endl;
+		type = "STEADY";
+		Ni = 0;
+	}
+	else {
+		type = "TRANSIENT";
+		cout << "found input file for times. Estimates will be provided for times: " << endl;
+		file >> Ntimes ;
+		for (int i=0; i<Ntimes; i++) {
+			file >> t_max;
+			cout << t_max << " s" <<endl;
+		}
+		cout << "maximum simulation time: " << t_max << " s" << endl;
+	}
+	const char * local_type = type.c_str();
+    file.close();
+	// no "flat" detectors.
+	ptr_to_presc = NULL;
+	Np = 0;
+	// read and define volumetric sources, they come from temperature detectors. However, they are defined only if steady state. If transient, then they have to be counter as initial
+	file.open(T_det);
+	if (file.fail() || strcmp(type.c_str(),"TRANSIENT")==0){
+		Nv = 0;
+		sprd_src_array = NULL;
+	}
+	else
+    {
+	    file >> Nv; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
+	    if (Nv>0){
+            sprd_src_array = new volumetric[Nv];
+            for (int i = 0; i<Nv; i++){
+                file >> sprd_src_array[i].segs[0].point1.x;
+                file >> sprd_src_array[i].segs[0].point1.y;
+
+                file >> sprd_src_array[i].segs[1].point1.x;
+                file >> sprd_src_array[i].segs[1].point1.y;
+
+                file >> sprd_src_array[i].segs[2].point1.x;
+                file >> sprd_src_array[i].segs[2].point1.y;
+
+                file >> sprd_src_array[i].segs[3].point1.x;
+                file >> sprd_src_array[i].segs[3].point1.y;
+
+                sprd_src_array[i].temp = 1;
+                sprd_src_array[i].temp_eq = 0;// we just set default values for those
+
+                sprd_src_array[i].segs[0].point2.x = sprd_src_array[i].segs[1].point1.x;
+                sprd_src_array[i].segs[0].point2.y = sprd_src_array[i].segs[1].point1.y;
+
+                sprd_src_array[i].segs[1].point2.x = sprd_src_array[i].segs[2].point1.x;
+                sprd_src_array[i].segs[1].point2.y = sprd_src_array[i].segs[2].point1.y;
+
+                sprd_src_array[i].segs[2].point2.x = sprd_src_array[i].segs[3].point1.x;
+                sprd_src_array[i].segs[2].point2.y = sprd_src_array[i].segs[3].point1.y;
+
+                sprd_src_array[i].segs[3].point2.x = sprd_src_array[i].segs[0].point1.x;
+                sprd_src_array[i].segs[3].point2.y = sprd_src_array[i].segs[0].point1.y;
+
+                // calculate area
+                sprd_src_array[i].area = calc_area(sprd_src_array[i].segs[0].point1,sprd_src_array[i].segs[1].point1,sprd_src_array[i].segs[1].point2)
+                +calc_area(sprd_src_array[i].segs[0].point1,sprd_src_array[i].segs[2].point1,sprd_src_array[i].segs[2].point2);
+
+                // center of the shape
+                sprd_src_array[i].center.x = (sprd_src_array[i].segs[0].point1.x + sprd_src_array[i].segs[1].point1.x
+										  + sprd_src_array[i].segs[2].point1.x + sprd_src_array[i].segs[3].point1.x)/4;
+                sprd_src_array[i].center.y = (sprd_src_array[i].segs[0].point1.y + sprd_src_array[i].segs[1].point1.y
+										  + sprd_src_array[i].segs[2].point1.y + sprd_src_array[i].segs[3].point1.y)/4;
+            }
+	    }
+	    else
+	    {
+	        sprd_src_array = NULL;
+	    }
+    }
+	file.close();
+	//read and define body forces, they come from heat flux detectors
+	file.open(H_det);
+	if (file.fail()){
+		Nb = 0;
+		bd_frc_array = NULL;
+	}
+	else
+    {
+	    file >> Nb; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
+	    if (Nb > 0)
+        {
+            bd_frc_array = new body_force[Nb];
+            for (int i = 0; i<Nb; i++){
+                file >> bd_frc_array[i].segs[0].point1.x;
+                file >> bd_frc_array[i].segs[0].point1.y;
+
+                file >> bd_frc_array[i].segs[1].point1.x;
+                file >> bd_frc_array[i].segs[1].point1.y;
+
+                file >> bd_frc_array[i].segs[2].point1.x;
+                file >> bd_frc_array[i].segs[2].point1.y;
+
+                file >> bd_frc_array[i].segs[3].point1.x;
+                file >> bd_frc_array[i].segs[3].point1.y;
+
+                file >> bd_frc_array[i].vctr.x;
+                file >> bd_frc_array[i].vctr.y;
+
+                bd_frc_array[i].segs[0].point2.x = bd_frc_array[i].segs[1].point1.x;
+                bd_frc_array[i].segs[0].point2.y = bd_frc_array[i].segs[1].point1.y;
+
+                bd_frc_array[i].segs[1].point2.x = bd_frc_array[i].segs[2].point1.x;
+                bd_frc_array[i].segs[1].point2.y = bd_frc_array[i].segs[2].point1.y;
+
+                bd_frc_array[i].segs[2].point2.x = bd_frc_array[i].segs[3].point1.x;
+                bd_frc_array[i].segs[2].point2.y = bd_frc_array[i].segs[3].point1.y;
+
+                bd_frc_array[i].segs[3].point2.x = bd_frc_array[i].segs[0].point1.x;
+                bd_frc_array[i].segs[3].point2.y = bd_frc_array[i].segs[0].point1.y;
+
+                // calculate area
+                bd_frc_array[i].area = calc_area(bd_frc_array[i].segs[0].point1,bd_frc_array[i].segs[1].point1,bd_frc_array[i].segs[1].point2)
+                +calc_area(bd_frc_array[i].segs[0].point1,bd_frc_array[i].segs[2].point1,bd_frc_array[i].segs[2].point2);
+
+                // center of the shape
+                bd_frc_array[i].center.x = (bd_frc_array[i].segs[0].point1.x + bd_frc_array[i].segs[1].point1.x
+										+ bd_frc_array[i].segs[2].point1.x + bd_frc_array[i].segs[3].point1.x)/4;
+                bd_frc_array[i].center.y = (bd_frc_array[i].segs[0].point1.y + bd_frc_array[i].segs[1].point1.y
+										+ bd_frc_array[i].segs[2].point1.y + bd_frc_array[i].segs[3].point1.y)/4;
+            }
+        }
+        else
+        {
+            bd_frc_array = NULL;
+        }
+	}
+	file.close();
+    //read and define initial
+	file.open(T_det);
+	if (file.fail() || strcmp(type.c_str(),"STEADY")==0){
+		Ni = 0;
+		initial_condition = NULL;
+	}
+	else
+    {
+	    file >> Ni; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
+	    if (Ni > 0)
+        {
+            initial_condition = new initial[Ni];
+            for (int i = 0; i<Ni; i++){
+                file >> initial_condition[i].segs[0].point1.x;
+                file >> initial_condition[i].segs[0].point1.y;
+
+                file >> initial_condition[i].segs[1].point1.x;
+                file >> initial_condition[i].segs[1].point1.y;
+
+                file >> initial_condition[i].segs[2].point1.x;
+                file >> initial_condition[i].segs[2].point1.y;
+
+                file >> initial_condition[i].segs[3].point1.x;
+                file >> initial_condition[i].segs[3].point1.y;
+
+                initial_condition[i].temp = 1; // this have to somehow be normalized in the adjoint case
+                initial_condition[i].temp_eq = 0;
+
+                initial_condition[i].segs[0].point2.x = initial_condition[i].segs[1].point1.x;
+                initial_condition[i].segs[0].point2.y = initial_condition[i].segs[1].point1.y;
+
+                initial_condition[i].segs[1].point2.x = initial_condition[i].segs[2].point1.x;
+                initial_condition[i].segs[1].point2.y = initial_condition[i].segs[2].point1.y;
+
+                initial_condition[i].segs[2].point2.x = initial_condition[i].segs[3].point1.x;
+                initial_condition[i].segs[2].point2.y = initial_condition[i].segs[3].point1.y;
+
+                initial_condition[i].segs[3].point2.x = initial_condition[i].segs[0].point1.x;
+                initial_condition[i].segs[3].point2.y = initial_condition[i].segs[0].point1.y;
+
+                // calculate area
+                initial_condition[i].area = calc_area(initial_condition[i].segs[0].point1,initial_condition[i].segs[1].point1,initial_condition[i].segs[1].point2)
+                +calc_area(initial_condition[i].segs[0].point1,initial_condition[i].segs[2].point1,initial_condition[i].segs[2].point2);
+
+                // center of the shape
+                initial_condition[i].center.x = (initial_condition[i].segs[0].point1.x + initial_condition[i].segs[1].point1.x
+											 + initial_condition[i].segs[2].point1.x + initial_condition[i].segs[3].point1.x)/4;
+                initial_condition[i].center.y = (initial_condition[i].segs[0].point1.y + initial_condition[i].segs[1].point1.y
+											 + initial_condition[i].segs[2].point1.y + initial_condition[i].segs[3].point1.y)/4;
+            }
+	    }
+	    else
+        {
+            initial_condition = NULL;
+        }
+	}
+	file.close();
+	// total number of sources
+	Ntot = Np + Nv + Nb + Ni;
+	// array to store the energies
+	energies = new double[Ntot];
+	source_type = new int[Ntot];
+	// define energies associated with flat detectors. Not supported in this version but keeping this part of code for future release
+	for (int i=0; i<Np; i++)
+	{
+		if (strcmp(local_type,"TRANSIENT")==0) {
+			energies[i] = mat->cumul_CV[mat->Nm-1]*(ptr_to_presc->presc_handle[i].length)*
+			(ptr_to_presc->presc_handle[i].temp-ptr_to_presc->presc_handle[i].temp_eq)/4;
+		}
+		else
+		{
+		    energies[i] = mat->cumul_CV[mat->Nm-1]*(ptr_to_presc->presc_handle[i].length)*
+		    (ptr_to_presc->presc_handle[i].temp-ptr_to_presc->presc_handle[i].temp_eq)/4;
+		}
+		source_type[i] = 1;
+		cout << "energy of " << i << " : " << energies[i] << endl;
+	}
+	// define energies associated with volumetric heating (steady temperature detector)
+	for (int i=Np; i<Np+Nv; i++)
+	{
+		if (strcmp(local_type,"TRANSIENT")==0) {
+			energies[i] = mat->cumul_C[mat->Nm-1]*(sprd_src_array[i-Np].area)*
+		    (sprd_src_array[i-Np].temp-sprd_src_array[i-Np].temp_eq)*t_max;
+			cout << "EXCEPTION: THIS IS ADJOINT CONSTRUCTOR FOR SOURCES. TRANSIENT MODE DETECTED BUT VOLUMETRIC HEATING NOT NULL" << endl;
+			abort();
+		}
+		else{
+		    energies[i] = 1;
+		}
+		source_type[i] = 2;
+		cout << "energy of " << i << " : " << energies[i] << endl;
+	}
+	// define energies associated with body force
+	for (int i=Np+Nv; i<Nv+Np+Nb; i++)
+	{
+		if (strcmp(local_type,"TRANSIENT")==0) {
+			energies[i] = mat->cumul_CV[mat->Nm-1]*
+		    sqrt(bd_frc_array[i-Np-Nv].vctr.x*bd_frc_array[i-Np-Nv].vctr.x+bd_frc_array[i-Np-Nv].vctr.y*bd_frc_array[i-Np-Nv].vctr.y)/2;
+		}
+		else{
+		    energies[i] = mat->cumul_CV[mat->Nm-1]*
+		    sqrt(bd_frc_array[i-Np-Nv].vctr.x*bd_frc_array[i-Np-Nv].vctr.x+bd_frc_array[i-Np-Nv].vctr.y*bd_frc_array[i-Np-Nv].vctr.y)/2;
+		}
+		// NOTE: in the adjoint case, transient or steady-state lead to same expression for the energy
+		source_type[i] = 3;
+		cout << "energy of " << i << " : " << energies[i] << endl;
+	}
+	if (strcmp(local_type,"TRANSIENT")==0) {
+		for (int i=Np+Nv+Nb; i<Ntot; i++)
+		{
+			energies[i] = 1;
+			source_type[i] = 4;
+			cout << "energy of " << i << " : " << energies[i] << endl;
+		}
+	}
+    // define energies associated with initial condition
+
+	// calculate and store the absolute cumulative energies
+	cumul_energies = new double[Ntot];
+	remaining_particles = new int[Ntot];
+	if (Ntot == 0) {
+		cout << "There does not seem to be any detector => no adjoint source => abort !" << endl;
+		abort();
+	}
+	cumul_energies[0] = abs(energies[0]);
+	for (int i = 1; i<Ntot; i++){
+		cumul_energies[i] = cumul_energies[i-1] + abs(energies[i]);
+	}
+	total_energy = cumul_energies[Ntot-1];
+	N_cumul = new double[Ntot];
+	cout << "normalized distribution of sources:" << endl;
+	for (int i = 0; i<Ntot; i++){
+		N_cumul[i] = cumul_energies[i]/cumul_energies[Ntot-1];
+		remaining_particles[i] = (int)floor(NN/Ntot); // each adjoint detector is assigned a number of particles such that the sum of the particles roughly equal the target
+		cout << i << " " <<N_cumul[i] << endl;
+	}
+	cout << "Number of particles per adjoint source: " << floor(NN/Ntot) << endl;
+	not_empty = true;
+}
 
 void sources::display_vol(){
+    cout << "Showing volumetric sources coordinates and intensity: " << endl;
     for (int i=0; i<Nv; i++)
 	{
 		cout << sprd_src_array[i].segs[0].point1.x << " " << sprd_src_array[i].segs[0].point1.y << " "
@@ -1962,6 +2294,7 @@ void sources::display_vol(){
 }
 
 void sources::display_bod(){
+    cout << "Showing 'body force' sources coordinates and direction vector: " << endl;
     for (int i=0; i<Nb; i++)
 	{
 		cout << bd_frc_array[i].segs[0].point1.x << " " << bd_frc_array[i].segs[0].point1.y << " "
@@ -1978,6 +2311,7 @@ void sources::display_bod(){
 }
 
 void sources::display_init(){
+    cout << "Showing initial conditions coordinates and magnitudes: " << endl;
     for (int i=0; i<Ni; i++)
 	{
 		cout << initial_condition[i].segs[0].point1.x << " " << initial_condition[i].segs[0].point1.y << " "
@@ -2100,16 +2434,846 @@ void sources::emit(particle * part, RandomClass * r) // updates properties of pa
 	part->alive = true; //born to be alive
 	part->counter = 0;
 }
-/*
- class detectors
- {
 
- }
- */
+void sources::emit_adjoint(particle * part, RandomClass * r) // updates properties of part to make it emitted by the sources
+{
+
+	double R, phi, nx, ny, Vx, Vy; //those will be useful for calculating the velocity
+
+	// first we need to check that the current emitting adjoint sourc is not "empty"
+    if (remaining_particles[src_parser]==0)
+    {
+	    if (src_parser < Ntot-1)
+		{
+			src_parser = src_parser+1;
+		}
+		else {
+			not_empty = false;
+		}
+	}
+    if (not_empty){
+	    int index_m;
+	    part->sig = 1; // will be different than only for heat flux detectors, half of the cases
+	    // 3 cases, depending on the index
+	    if (Np>0)
+	    {
+		    cout << "There seems to be a flat detector (not supported yet)" << endl;
+	        abort();
+	    }
+
+	    if (src_parser < Np+Nv)
+	    {// emission from volumetric source (corresponding to a temperature detector in steady state)
+		    //draw position
+            part->pt0 = emit_from_quadrilater(sprd_src_array[src_parser-Np], r);
+		    // draw mode index
+		    index_m = choose(r, ptr_to_mat->N_cumul_C, ptr_to_mat->Nm);
+		    part->V = ptr_to_mat->VG[index_m];
+	    	R = 2*r->randu()-1;
+    		phi = 2*PI*r->randu();
+	    	part->Vp0.x = (part->V)*R; // velocity (2D vector)
+		    part->Vp0.y = (part->V)*sqrt(1-R*R)*cos(phi);
+            // draw initial time (put 0 because not very important in steady state)
+	    	part->t = 0;
+
+        }
+        else {
+		    if (src_parser<Np+Nv+Nb) {
+			    // emission from body force source
+		    	// if we fall in that case,  the sign can be either positive or negative
+			    R = r->randu();
+    			nx = bd_frc_array[src_parser-Np-Nv].vctr.x/sqrt(bd_frc_array[src_parser-Np-Nv].vctr.x*bd_frc_array[src_parser-Np-Nv].vctr.x
+	    													 +bd_frc_array[src_parser-Np-Nv].vctr.y*bd_frc_array[src_parser-Np-Nv].vctr.y);
+		    	ny = bd_frc_array[src_parser-Np-Nv].vctr.y/sqrt(bd_frc_array[src_parser-Np-Nv].vctr.x*bd_frc_array[src_parser-Np-Nv].vctr.x
+			    											 +bd_frc_array[src_parser-Np-Nv].vctr.y*bd_frc_array[src_parser-Np-Nv].vctr.y);
+    			if (R<0.5)
+	    		{
+		    		part->sig = 1;
+			    }
+    			else {
+	    			part->sig = -1;
+		    	}
+			    //draw position
+                part->pt0 = emit_from_quadrilater(bd_frc_array[src_parser-Np-Nv], r);
+        		//draw mode index
+		    	index_m = choose(r, ptr_to_mat->N_cumul_CV, ptr_to_mat->Nm);
+			    part->V = ptr_to_mat->VG[index_m];
+    			R = r->randu();
+	    		phi = 2*PI*r->randu();
+	 	    	Vx = part->sig*(part->V)*sqrt(R); // velocity (2D vector); //no "-" sign because adjoint
+			    Vy = part->sig*(part->V)*sqrt(1-R)*cos(phi);
+    			part->Vp0.x = nx*Vx-ny*Vy;
+	    		part->Vp0.y = ny*Vx+nx*Vy;
+		    	// draw initial time (could either be steady state or not so important to put the transient quantity here)
+			    part->t = t_max*r->randu();
+		    }
+		    else {
+			    if (src_parser<Ntot)
+			    {
+				    // emission from initial condition
+				    //draw position
+				    part->pt0 = emit_from_quadrilater(initial_condition[src_parser-Np-Nv-Nb], r);
+				    //draw mode index
+    				index_m = choose(r, ptr_to_mat->N_cumul_C, ptr_to_mat->Nm); // Here we consider that the initial distribution is a Bose-Einstein
+	    			part->V = ptr_to_mat->VG[index_m];
+		    		R = 2*r->randu()-1;
+			    	phi = 2*PI*r->randu();
+				    part->Vp0.x = (part->V)*R; // velocity (2D vector)
+				    part->Vp0.y = (part->V)*sqrt(1-R*R)*cos(phi);
+			    	part->t = 0; // time is zero if emitted from initial source
+			    }
+			    else {
+				    cout << "In sources::emit, chosen index not within the expected range" << endl;
+				    abort();
+			    }
+		    }
+	    }
+
+        //assign the rest of the particle properties
+	    part->mode_index = index_m;
+	    part->tau = ptr_to_mat->tau[index_m]; //current relaxation time
+	    part->pol = ptr_to_mat->pol[index_m]; // current polarization
+	    part->weight = energies[src_parser]/floor(Npart/Ntot);
+	    part->alive = true; //born to be alive
+	    part->counter = 0;
+    }
+    // update the source parser and the remaining  particles in each
+    if (remaining_particles[src_parser]>0)
+    {
+	    remaining_particles[src_parser] = remaining_particles[src_parser] - 1;
+	}
+
+
+}
+
+class adjoint_detectors{ // this class will read the relevant source files and define the adjoint detectors to be used.
+public:
+	adjoint_detectors(){ptr_to_presc = NULL; sprd_src_array = NULL; bd_frc_array = NULL; initial_condition = NULL; msr_times = NULL;
+	steady_H = NULL; steady_T = NULL; H_estimates=NULL; T_estimates = NULL;};
+	~adjoint_detectors();
+	adjoint_detectors(prescribed_bdrs * presc, const char * volumetric, const char * body_force, const char * initial, const char * filename_time, sources * src);
+	// THIS CONSTRUCTOR MAY ONLY BE CALLED AFTER THE adjoint sources HAVE BEEN INITIALIZED
+	void measure(particle * part, sources * src);
+	void write(const char * filenameT, const char * filenameH);
+	void show_results();
+	string type;
+	prescribed_bdrs * ptr_to_presc;
+	volumetric * sprd_src_array; //pointer to array of volumetric sources
+	body_force * bd_frc_array; //pointer to array of body force types of sources
+	initial * initial_condition;
+	int msr_index;
+	double ** H_estimates;
+	double ** T_estimates;
+	double * steady_H;
+	double * steady_T;
+	int Np;
+	int Nv;
+	int Nb;
+	int Ni;
+	int Ntot;
+	int Nt;
+	int NT;
+	int NH;
+	double * msr_times;
+};
+
+adjoint_detectors::~adjoint_detectors()  //NOTE: DEBUGGING FLAGS LEFT THERE (AS COMMENTS) IN CASE NEEDED LATER
+{
+  //        cout <<"delete" << endl;
+    /*    for (int i =0 ; i<NT; i++){
+                cout << i ;
+            for (int j = 0; j<Nt; j++){
+                cout << " " << T_estimates[i]+j <<endl;
+            }
+        cout <<endl;
+        }*/
+//cout << "ok 0" << endl;
+	if (sprd_src_array!=NULL) {
+  //          cout << "ok 00 " << sprd_src_array << endl;
+	 //   for (int i =0 ; i<Nv; i++){
+    //        cout << i << " SPRD " << sprd_src_array+i << endl;
+	//    }
+		delete[] sprd_src_array;
+	}
+//	cout << "ok 1" << endl;
+	if (bd_frc_array!=NULL) {
+//	    cout << "ok 01" << endl;
+		delete[] bd_frc_array;
+	}
+//	cout << "ok 2" << endl;
+	if (initial_condition!=NULL) {
+//	    cout << "ok 02" << endl;
+		delete[] initial_condition;
+	}
+//	cout << "ok 3" << endl;
+	if (msr_times!=NULL) {
+//	    cout << "ok 03" << endl;
+ //           for (int i =0 ; i<Nt; i++){
+ //           cout << i << " MSRT " << msr_times+i << endl;
+//	    }
+		delete[] msr_times;
+	}
+//	cout << "ok 4" << endl;
+	if (steady_H!=NULL) {
+
+		delete[] steady_H;
+	}
+	if (steady_T!=NULL) {
+
+		delete[] steady_T;
+	}
+	if (H_estimates!=NULL){
+	    for (int i=0; i<NH; i++) {
+	        if (H_estimates[i] != NULL)
+	        {
+                delete[] H_estimates[i];
+	        }
+		}
+		delete[] H_estimates;
+	}
+    if (T_estimates!=NULL){
+	    for (int i=0; i<NT; i++) {
+	        if (T_estimates[i] != NULL)
+	        {
+                delete[] T_estimates[i];
+	        }
+		}
+		delete[] T_estimates;
+	}
+}
+
+adjoint_detectors::adjoint_detectors(prescribed_bdrs * presc, const char * vol, const char * bod, const char * init, const char * filename_time, sources * src)
+{
+
+	//determine the type of simulation (transient of steady)
+	int Ntimes;
+	point pt1, pt2, pt3, pt4;
+	ifstream file, filetime;
+	file.open(filename_time);
+	if (file.fail()) {
+		Nt = 0;
+		type = "STEADY";
+		msr_times = NULL;
+	}
+	else{
+		type = "TRANSIENT";
+		file >> Nt;
+		msr_times = new double[Nt];
+		msr_index = -1;
+		for (int i = 0; i<Nt; i++)
+		{
+			file >> msr_times[i];
+		}
+	}
+	const char * local_type = type.c_str();
+    file.close();
+	// pointer to the prescribed sources
+	ptr_to_presc = presc;
+	Np = presc->N;
+	// read and define volumetric
+	file.open(vol);
+	if (file.fail()){
+		Nv = 0;
+		sprd_src_array = NULL;
+	}
+	else
+    {
+	    file >> Nv; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
+	    if (Nv>0){
+	        sprd_src_array = new volumetric[Nv];
+	        for (int i = 0; i<Nv; i++){
+		        file >> sprd_src_array[i].segs[0].point1.x;
+			    file >> sprd_src_array[i].segs[0].point1.y;
+
+			    file >> sprd_src_array[i].segs[1].point1.x;
+			    file >> sprd_src_array[i].segs[1].point1.y;
+
+			    file >> sprd_src_array[i].segs[2].point1.x;
+			    file >> sprd_src_array[i].segs[2].point1.y;
+
+			    file >> sprd_src_array[i].segs[3].point1.x;
+			    file >> sprd_src_array[i].segs[3].point1.y;
+
+    			file >> sprd_src_array[i].temp;
+	    		file >> sprd_src_array[i].temp_eq;
+
+		    	sprd_src_array[i].segs[0].point2.x = sprd_src_array[i].segs[1].point1.x;
+			    sprd_src_array[i].segs[0].point2.y = sprd_src_array[i].segs[1].point1.y;
+
+			    sprd_src_array[i].segs[1].point2.x = sprd_src_array[i].segs[2].point1.x;
+			    sprd_src_array[i].segs[1].point2.y = sprd_src_array[i].segs[2].point1.y;
+
+			    sprd_src_array[i].segs[2].point2.x = sprd_src_array[i].segs[3].point1.x;
+			    sprd_src_array[i].segs[2].point2.y = sprd_src_array[i].segs[3].point1.y;
+
+			    sprd_src_array[i].segs[3].point2.x = sprd_src_array[i].segs[0].point1.x;
+			    sprd_src_array[i].segs[3].point2.y = sprd_src_array[i].segs[0].point1.y;
+
+			    // calculate area
+			    sprd_src_array[i].area = calc_area(sprd_src_array[i].segs[0].point1,sprd_src_array[i].segs[1].point1,sprd_src_array[i].segs[1].point2)
+			    +calc_area(sprd_src_array[i].segs[0].point1,sprd_src_array[i].segs[2].point1,sprd_src_array[i].segs[2].point2);
+
+			    // center of the shape
+			    sprd_src_array[i].center.x = (sprd_src_array[i].segs[0].point1.x + sprd_src_array[i].segs[1].point1.x
+										  + sprd_src_array[i].segs[2].point1.x + sprd_src_array[i].segs[3].point1.x)/4;
+			    sprd_src_array[i].center.y = (sprd_src_array[i].segs[0].point1.y + sprd_src_array[i].segs[1].point1.y
+										  + sprd_src_array[i].segs[2].point1.y + sprd_src_array[i].segs[3].point1.y)/4;
+	        }
+	    }
+	    else{
+	        sprd_src_array = NULL;
+        }
+    }
+    file.close();
+	//read and define body forces
+	file.open(bod);
+	if (file.fail()){
+		Nb = 0;
+		bd_frc_array = NULL;
+	}
+	else
+    {
+	    file >> Nb; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
+	    if (Nb>0){
+	        bd_frc_array = new body_force[Nb];
+	        for (int i = 0; i<Nb; i++){
+		        file >> bd_frc_array[i].segs[0].point1.x;
+			    file >> bd_frc_array[i].segs[0].point1.y;
+
+			    file >> bd_frc_array[i].segs[1].point1.x;
+		    	file >> bd_frc_array[i].segs[1].point1.y;
+
+    			file >> bd_frc_array[i].segs[2].point1.x;
+		    	file >> bd_frc_array[i].segs[2].point1.y;
+
+			    file >> bd_frc_array[i].segs[3].point1.x;
+    			file >> bd_frc_array[i].segs[3].point1.y;
+
+	    		file >> bd_frc_array[i].vctr.x;
+		    	file >> bd_frc_array[i].vctr.y;
+
+    			bd_frc_array[i].segs[0].point2.x = bd_frc_array[i].segs[1].point1.x;
+	    		bd_frc_array[i].segs[0].point2.y = bd_frc_array[i].segs[1].point1.y;
+
+		    	bd_frc_array[i].segs[1].point2.x = bd_frc_array[i].segs[2].point1.x;
+			    bd_frc_array[i].segs[1].point2.y = bd_frc_array[i].segs[2].point1.y;
+
+    			bd_frc_array[i].segs[2].point2.x = bd_frc_array[i].segs[3].point1.x;
+	    		bd_frc_array[i].segs[2].point2.y = bd_frc_array[i].segs[3].point1.y;
+
+		    	bd_frc_array[i].segs[3].point2.x = bd_frc_array[i].segs[0].point1.x;
+			    bd_frc_array[i].segs[3].point2.y = bd_frc_array[i].segs[0].point1.y;
+
+	    		// calculate area
+		    	bd_frc_array[i].area = calc_area(bd_frc_array[i].segs[0].point1,bd_frc_array[i].segs[1].point1,bd_frc_array[i].segs[1].point2)
+			    +calc_area(bd_frc_array[i].segs[0].point1,bd_frc_array[i].segs[2].point1,bd_frc_array[i].segs[2].point2);
+
+    			// center of the shape
+	    		bd_frc_array[i].center.x = (bd_frc_array[i].segs[0].point1.x + bd_frc_array[i].segs[1].point1.x
+										+ bd_frc_array[i].segs[2].point1.x + bd_frc_array[i].segs[3].point1.x)/4;
+		    	bd_frc_array[i].center.y = (bd_frc_array[i].segs[0].point1.y + bd_frc_array[i].segs[1].point1.y
+										+ bd_frc_array[i].segs[2].point1.y + bd_frc_array[i].segs[3].point1.y)/4;
+	        }
+    	}
+    	else{
+            bd_frc_array = NULL;
+    	}
+    }
+	file.close();
+    //read and define initial conditions
+	file.open(init);
+	if (file.fail()){
+		Ni = 0;
+		initial_condition = NULL;
+	}
+	else
+    {
+	    file >> Ni; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
+	    if (Ni>0)
+        {
+	        initial_condition = new initial[Ni];
+	        for (int i = 0; i<Ni; i++){
+		        file >> initial_condition[i].segs[0].point1.x;
+    			file >> initial_condition[i].segs[0].point1.y;
+
+			    file >> initial_condition[i].segs[1].point1.x;
+    			file >> initial_condition[i].segs[1].point1.y;
+
+			    file >> initial_condition[i].segs[2].point1.x;
+			    file >> initial_condition[i].segs[2].point1.y;
+
+    			file >> initial_condition[i].segs[3].point1.x;
+	    		file >> initial_condition[i].segs[3].point1.y;
+
+			    file >> initial_condition[i].temp;
+			    file >> initial_condition[i].temp_eq;
+
+			    initial_condition[i].segs[0].point2.x = initial_condition[i].segs[1].point1.x;
+			    initial_condition[i].segs[0].point2.y = initial_condition[i].segs[1].point1.y;
+
+    			initial_condition[i].segs[1].point2.x = initial_condition[i].segs[2].point1.x;
+	    		initial_condition[i].segs[1].point2.y = initial_condition[i].segs[2].point1.y;
+
+		    	initial_condition[i].segs[2].point2.x = initial_condition[i].segs[3].point1.x;
+			    initial_condition[i].segs[2].point2.y = initial_condition[i].segs[3].point1.y;
+
+			    initial_condition[i].segs[3].point2.x = initial_condition[i].segs[0].point1.x;
+			    initial_condition[i].segs[3].point2.y = initial_condition[i].segs[0].point1.y;
+
+    			// calculate area
+	    		initial_condition[i].area = calc_area(initial_condition[i].segs[0].point1,initial_condition[i].segs[1].point1,initial_condition[i].segs[1].point2)
+		    	+calc_area(initial_condition[i].segs[0].point1,initial_condition[i].segs[2].point1,initial_condition[i].segs[2].point2);
+
+			    // center of the shape
+			    initial_condition[i].center.x = (initial_condition[i].segs[0].point1.x + initial_condition[i].segs[1].point1.x
+											 + initial_condition[i].segs[2].point1.x + initial_condition[i].segs[3].point1.x)/4;
+			    initial_condition[i].center.y = (initial_condition[i].segs[0].point1.y + initial_condition[i].segs[1].point1.y
+											 + initial_condition[i].segs[2].point1.y + initial_condition[i].segs[3].point1.y)/4;
+	        }
+	    }
+	    else
+        {
+            initial_condition = NULL;
+        }
+    }
+	file.close();
+	// total number of sources
+	Ntot = Np + Nv + Nb + Ni;
+
+
+    //Exception test: This is just for debugging/ bug detection purpose
+    if (src->Nv>0 && strcmp(type.c_str(),"TRANSIENT") ==0)
+    {
+        cout << "detected volumetric adjoint sources although the calculation is set to transient => abort " << endl;
+        abort();
+    }
+    if (src->Ni>0 && strcmp(type.c_str(),"STEADY") ==0)
+    {
+        cout << "detected initial adjoint sources although the calculation is set to steady => abort " << endl;
+        abort();
+    }
+    // Allocate and initialize the estimates from information provided by the adjoint source
+    // normally the size of the temperature estimate array is given by the number of volumetric + initial sources
+    NT = src->Nv + src->Ni;
+    // the size of the heatflux estimates array is given by the number of body force sources
+    NH = src->Nb;
+    if (NT>0 && Nt>0) // transient case with T detectors
+    {
+        T_estimates = new double*[NT];
+        for (int i = 0; i<NT; i++){
+            T_estimates[i] = new double[Nt];
+		    for (int j=0; j<Nt; j++) {
+			    T_estimates[i][j] = 0;
+		    }
+		}
+    }
+    if (NH>0 && Nt>0) // transient case with H detectors
+    {
+		H_estimates = new double*[NH];
+	    for (int i = 0; i<NH; i++){
+		    H_estimates[i] = new double[Nt];
+		    for (int j=0; j<Nt; j++) {
+			    H_estimates[i][j] = 0;
+		    }
+        }
+    }
+    if (NH>0 && Nt == 0)
+    {
+		steady_H = new double[NH];
+		for (int i=0; i<NH; i++)
+		{
+			steady_H[i]=0;
+		}
+	}
+    if (NT>0 && Nt == 0)
+    {
+	    steady_T = new double[NT];
+	    for (int i=0; i<NT; i++)
+    	{
+		    steady_T[i]=0;
+	    }
+    }
+}
+
+void adjoint_detectors::measure(particle * part, sources * src) // measure with the adjoint detectors
+{
+	double cntrbt;
+	int type_dect;
+	int index_dect;
+  //  cout << "flag 1" << endl;
+	point pt, nrmlzd_seg; // point structure to store the coordinates of the normalized vector colinear with segment;
+	segment seg1;
+	// First, we define the type of detector we are currently looking at and the associated index
+	if (src->src_parser < src->Nv+src->Np) { // this one means the adjoint source corresponds to volumetric i.e. temperature detector in steady case
+		type_dect = 1;
+		index_dect = src->src_parser-src->Np;
+	}
+	if (src->Nv+src->Np <= src->src_parser &&src->src_parser <src->Nv+src->Nb+src->Np) { // this one means heat flux detector
+		type_dect = 2;
+		index_dect = src->src_parser-(src->Nv+src->Np);
+	}
+	if (src->src_parser>=src->Ntot-src->Ni) { // this one means temperature detector, transient case
+		type_dect = 3;
+		index_dect = src->src_parser-(src->Nv+src->Np+src->Nb);
+	}
+//    cout << "flag 2" << endl;
+	// Second, we check if there is a contribution from contact with emitting wall
+	if (part->collision_type == 2)
+	{
+        // if transient: we need to add the contribution to ALL times below the collision time
+		if (strcmp(type.c_str(),"TRANSIENT")==0) {
+		    for (int j = 0; j<Nt; j++) {
+		        if (part->t + part->Dt <msr_times[j]) {
+				    if (type_dect == 1) // all cases should be the same but splitting for clarity
+				    {
+					    T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*
+					    (ptr_to_presc->presc_handle[part->collision_index].temp-ptr_to_presc->presc_handle[part->collision_index].temp_eq);
+					    cout << "DEBUGGING: this case should not happen 1" << endl;
+				    }
+				    if (type_dect == 2) {
+					    H_estimates[index_dect][j] = H_estimates[index_dect][j] + part->sig*part->weight*
+					    (ptr_to_presc->presc_handle[part->collision_index].temp-ptr_to_presc->presc_handle[part->collision_index].temp_eq);
+				    }
+				    if (type_dect == 3) {
+					    T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*
+					    (ptr_to_presc->presc_handle[part->collision_index].temp-ptr_to_presc->presc_handle[part->collision_index].temp_eq);
+
+				    }
+			    }
+		    }
+		}
+		else {
+            // if steady: just need to add the contribution
+	    	if (type_dect == 1) //steady case
+	    	{
+	    		steady_T[index_dect] = steady_T[index_dect] + part->sig*part->weight*
+	    		(ptr_to_presc->presc_handle[part->collision_index].temp-ptr_to_presc->presc_handle[part->collision_index].temp_eq);
+			}
+		    if (type_dect == 2) {
+			    steady_H[index_dect] = steady_H[index_dect] + part->sig*part->weight*
+			    (ptr_to_presc->presc_handle[part->collision_index].temp-ptr_to_presc->presc_handle[part->collision_index].temp_eq);
+		    }
+	        if (type_dect == 3) {
+			    steady_T[index_dect] = steady_T[index_dect] + part->sig*part->weight*
+			    (ptr_to_presc->presc_handle[part->collision_index].temp-ptr_to_presc->presc_handle[part->collision_index].temp_eq);
+			    cout << "DEBUGGING: this case should not happen 2" << endl;
+		    }
+		}
+    }
+
+//cout << "flag 3" << endl;
+    for (int i  = 0; i<Nv; i++) //run through all volumetric sources (used as adjoint detectors)
+    {
+        if (strcmp(type.c_str(),"TRANSIENT")==0) {
+            seg1.point1 = part->pt0;
+	        for (int j = 0; j<Nt; j++) {
+	            if (part->t < msr_times[j] && part->t+part->Dt > msr_times[j]) { // for those times, it will only count partially
+                    // define point at given times
+                    pt.x = part->pt0.x + (msr_times[j] - part->t)*part->Vp0.x;
+                    pt.y = part->pt0.y + (msr_times[j] - part->t)*part->Vp0.y;
+                    seg1.point2 = pt;
+                    //calculate the contribution based on the overlap between the segment and the adjoint detector
+                   // cout << "flag 32" << endl;
+                    if (overlap_quad(seg1, sprd_src_array[i])) // first, test if there is any overlap
+                    {
+                     //   cout << "flag 33" << endl;
+                        cntrbt = overlap_length(seg1, sprd_src_array[i]); // this gives a (2D) distance
+                        if (type_dect == 1) // all cases should be the same but splitting for clarity
+                        {
+                            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*cntrbt/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y)*
+				            (sprd_src_array[i].temp-sprd_src_array[i].temp_eq);
+                            // unit is temperature
+				            cout << "DEBUGGING: this case should not happen 3" << endl;
+			            }
+                        if (type_dect == 2) {
+				            H_estimates[index_dect][j] = H_estimates[index_dect][j] + part->sig*part->weight*cntrbt/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y)*
+				            (sprd_src_array[i].temp-sprd_src_array[i].temp_eq);
+                            // unit is W/m^2
+				        }
+				        if (type_dect == 3) {
+				            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*cntrbt/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y)*
+				            (sprd_src_array[i].temp-sprd_src_array[i].temp_eq);
+				        }
+                    }
+                }
+                if (part->t+part->Dt < msr_times[j]) { // for those times it will count entirely: the "ending" point is just part->pt1
+                    seg1.point2 = part->pt1;
+                //calculate the contribution based on the overlap between the segment and the adjoint detector
+                    if (overlap_quad(seg1, sprd_src_array[i])) // first, test if there is any overlap
+                    {
+                        cntrbt = overlap_length(seg1, sprd_src_array[i]); // this gives a (2D) distance
+                        if (type_dect == 1) // all cases should be the same but splitting for clarity
+                        {
+                            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*cntrbt/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y)*
+				            (sprd_src_array[i].temp-sprd_src_array[i].temp_eq);
+                            // unit is temperature
+				            cout << "DEBUGGING: this case should not happen 3" << endl;
+			            }
+                        if (type_dect == 2) {
+				            H_estimates[index_dect][j] = H_estimates[index_dect][j] + part->sig*part->weight*cntrbt/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y)*
+				            (sprd_src_array[i].temp-sprd_src_array[i].temp_eq);
+                            // unit is W/m^2
+				        }
+				        if (type_dect == 3) {
+				            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*cntrbt/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y)*
+				            (sprd_src_array[i].temp-sprd_src_array[i].temp_eq);
+				        }
+                    }
+                }
+	        }
+        }
+        else {
+            // if steady: just need to add the contribution
+            seg1.point1 = part->pt0;
+            seg1.point2 = part->pt1;
+
+            //calculate the contribution based on the overlap between the segment and the adjoint detector
+            if (overlap_quad(seg1, sprd_src_array[i])) // first, test if there is any overlap
+            {
+                cntrbt = overlap_length(seg1, sprd_src_array[i]); // this gives a (2D) distance
+	    	    if (type_dect == 1) //steady case
+	    	    {
+	    	        steady_T[index_dect] = steady_T[index_dect] + part->sig*part->weight*cntrbt/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y)*
+	    		    (sprd_src_array[i].temp-sprd_src_array[i].temp_eq);
+			    }
+		        if (type_dect == 2) {
+			        steady_H[index_dect] = steady_H[index_dect] + part->sig*part->weight*cntrbt/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y)*
+			        (sprd_src_array[i].temp-sprd_src_array[i].temp_eq);
+		        }
+	            if (type_dect == 3) {
+			        steady_T[index_dect] = steady_T[index_dect] + part->sig*part->weight*cntrbt/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y)*
+			        (sprd_src_array[i].temp-sprd_src_array[i].temp_eq);
+			        cout << "DEBUGGING: this case should not happen 4" << endl;
+		        }
+		    }
+        }
+    }
+
+//cout << "flag 4" << endl;
+
+    for (int i  = 0; i<Nb; i++) //run through all body force sources (used as adjoint detectors)
+    {
+        if (strcmp(type.c_str(),"TRANSIENT")==0) {
+
+	        for (int j = 0; j<Nt; j++) {
+	            if (part->t <= msr_times[j] && part->t+part->Dt > msr_times[j]) { // for those times, it will only count partially
+                    // define point at given times
+                    pt.x = part->pt0.x + (msr_times[j] - part->t)*part->Vp0.x;
+                    pt.y = part->pt0.y + (msr_times[j] - part->t)*part->Vp0.y;
+                    seg1.point1 = part->pt0;
+                    seg1.point2 = pt;
+                    //calculate the contribution based on the overlap between the segment and the adjoint detector
+                    if (overlap_quad(seg1, bd_frc_array[i])) // first, test if there is any overlap
+                    {
+                        cntrbt = overlap_length(seg1, bd_frc_array[i]); // this gives a (2D) distance
+	                    nrmlzd_seg.x = (part->seg.point2.x - part->seg.point1.x)/
+	                        sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
+	                    nrmlzd_seg.y = (part->seg.point2.y - part->seg.point1.y)/
+                            sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
+
+                        cntrbt = cntrbt*(nrmlzd_seg.x*bd_frc_array[i].vctr.x + nrmlzd_seg.y*bd_frc_array[i].vctr.y);
+
+                        if (type_dect == 1) // all cases should be the same but splitting for clarity
+                        {
+                            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*cntrbt;
+                            // unit is temperature
+				            cout << "DEBUGGING: this case should not happen 3" << endl;
+			            }
+                        if (type_dect == 2) {
+				            H_estimates[index_dect][j] = H_estimates[index_dect][j] + part->sig*part->weight*cntrbt;
+                            // unit is W/m^2
+				        }
+				        if (type_dect == 3) {
+				            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*cntrbt;
+				        }
+                    }
+                }
+                if (part->t+part->Dt <= msr_times[j]) { // for those times it will count entirely: the "ending" point is just part->pt1
+                    seg1.point1 = part->pt0;
+                    seg1.point2 = part->pt1;
+
+                //calculate the contribution based on the overlap between the segment and the adjoint detector
+                    if (overlap_quad(seg1, bd_frc_array[i])) // first, test if there is any overlap
+                    {
+                        cntrbt = overlap_length(seg1, bd_frc_array[i]); // this gives a (2D) distance
+                        nrmlzd_seg.x = (part->seg.point2.x - part->seg.point1.x)/
+	                        sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
+	                    nrmlzd_seg.y = (part->seg.point2.y - part->seg.point1.y)/
+                            sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
+                        cntrbt = cntrbt*(nrmlzd_seg.x*bd_frc_array[i].vctr.x + nrmlzd_seg.y*bd_frc_array[i].vctr.y);
+
+                        if (type_dect == 1) // all cases should be the same but splitting for clarity
+                        {
+                            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*cntrbt;
+                            // unit is temperature
+				            cout << "DEBUGGING: this case should not happen 5" << endl;
+			            }
+                        if (type_dect == 2) {
+				            H_estimates[index_dect][j] = H_estimates[index_dect][j] + part->sig*part->weight*cntrbt;
+                            // unit is W/m^2
+				        }
+				        if (type_dect == 3) {
+				            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*cntrbt;
+				        }
+                    }
+                }
+	        }
+        }
+        else {
+            // if steady: just need to add the contribution
+            seg1.point1 = part->pt0;
+            seg1.point2 = part->pt1;
+
+            //calculate the contribution based on the overlap between the segment and the adjoint detector
+            if (overlap_quad(seg1, bd_frc_array[i])) // first, test if there is any overlap
+            {
+                cntrbt = overlap_length(seg1, bd_frc_array[i]);
+                nrmlzd_seg.x = (part->seg.point2.x - part->seg.point1.x)/
+	                        sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
+	                    nrmlzd_seg.y = (part->seg.point2.y - part->seg.point1.y)/
+                            sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
+                cntrbt = cntrbt*(nrmlzd_seg.x*bd_frc_array[i].vctr.x + nrmlzd_seg.y*bd_frc_array[i].vctr.y);
+	    	    if (type_dect == 1) //steady case
+	    	    {
+	    	        steady_T[index_dect] = steady_T[index_dect] + part->sig*part->weight*cntrbt;
+			    }
+		        if (type_dect == 2) {
+			        steady_H[index_dect] = steady_H[index_dect] + part->sig*part->weight*cntrbt;
+		        }
+	            if (type_dect == 3) {
+			        steady_T[index_dect] = steady_T[index_dect] + part->sig*part->weight*cntrbt;
+			        cout << "DEBUGGING: this case should not happen 6" << endl;
+		        }
+		    }
+        }
+    }
+
+
+//cout << "flag 5" << endl;
+
+    for (int i = 0; i<Ni; i++) //run through all INITIAL CONDITIONS
+    {
+        //NOTE: if any of those exist, this means this is a transient calculation
+		if (strcmp(type.c_str(),"STEADY")==0){
+            cout << "Warning: detected data defining an initial condition although the simulation mode is STEADY => ignoring the initial condition" << endl;
+            cout << "Relaunch without initial condition to get rid of this annoying message" << endl;
+		}
+		else{
+		    for (int j = 0; j<Nt; j++){
+                if (msr_times[j] >=part->t && msr_times[j] < part->t+part->Dt){ // simply check the measurement times between the particle last and next collision
+                    pt.x = part->pt0.x + part->Vp0.x*(msr_times[j]-part->t);
+                    pt.y = part->pt0.y + part->Vp0.y*(msr_times[j]-part->t);
+                    // check whether the particle would be in any of the detectors at these moments
+
+                    if (inside_quad(pt, initial_condition[i])){
+                        if (type_dect == 1) // all cases should be the same but splitting for clarity
+                        {
+                            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*(initial_condition[i].temp-initial_condition[i].temp_eq);
+                            // unit is temperature
+				            cout << "DEBUGGING: this case should not happen 7" << endl;
+			            }
+                        if (type_dect == 2) {
+				            H_estimates[index_dect][j] = H_estimates[index_dect][j] + part->sig*part->weight*(initial_condition[i].temp-initial_condition[i].temp_eq);
+                            // unit is W/m^2
+				        }
+				        if (type_dect == 3) {
+				            T_estimates[index_dect][j] = T_estimates[index_dect][j] + part->sig*part->weight*(initial_condition[i].temp-initial_condition[i].temp_eq);
+				        }
+
+				    }
+                }
+
+            }
+		}
+    }
+
+    if (strcmp(type.c_str(), "TRANSIENT")==0 && part->t + part->Dt > msr_times[Nt-1]) // the measure funtion handles this termination case because the detector knows the measuring times.
+    {
+        msr_index = -1; // only for transient cases: reset the msr_index
+        part->alive = 0; // "kill" the particle
+    }
+
+}
+
+void adjoint_detectors::write(const char * filenameT, const char * filenameH) //the first argument is the name where the temperature estimates are written
+// the second argument is the name where heat flux estimates are written.
+{
+	ofstream file;
+	file.open(filenameT);
+	for (int i = 0; i<NT ; i++){
+        if (strcmp(type.c_str(),"TRANSIENT")==0){
+            for (int j = 0; j<Nt; j++)
+            {
+                file << T_estimates[i][j];
+                file << " " ;
+            }
+            file << endl;
+        }
+        else{
+		    file << steady_T[i] << endl;
+        }
+	}
+	file.close();
+
+	file.open(filenameH);
+	for (int i = 0; i<NH; i++)
+    {
+        if (strcmp(type.c_str(),"TRANSIENT")==0){
+            for (int j = 0; j<Nt; j++)
+            {
+                file << H_estimates[i][j];
+                file << " " ;
+            }
+            file << endl;
+        }
+        else{
+		    file << steady_H[i] << endl;
+        }
+    }
+}
+
+void adjoint_detectors::show_results() //displays the results
+{
+    if (NT>0)
+        cout << "Showing temperature estimates: " << endl;
+	for (int i = 0; i<NT ; i++){
+        if (strcmp(type.c_str(),"TRANSIENT")==0){
+            for (int j = 0; j<Nt; j++)
+            {
+                cout << T_estimates[i][j];
+                cout << " " ;
+            }
+            cout << endl;
+        }
+        else{
+		    cout << steady_T[i] << endl;
+        }
+	}
+    cout << endl;
+    if (NH>0)
+        cout << "Showing heat flux estimates: " << endl;
+	for (int i = 0; i<NH; i++)
+    {
+        if (strcmp(type.c_str(),"TRANSIENT")==0){
+            for (int j = 0; j<Nt; j++)
+            {
+                cout << H_estimates[i][j];
+                cout << " " ;
+            }
+            cout << endl;
+        }
+        else{
+		    cout << steady_H[i] << endl;
+        }
+    }
+    cout << endl;
+}
+
 double fl(double x, double LX, int N) // "modulo" function (for debugging purpose)
 {
     return x-floor(x/LX)*LX;
 }
+
+
 
 // function used for printing the degree of completion in the main function
 void print_percent(int N, int Npart)
@@ -2117,6 +3281,8 @@ void print_percent(int N, int Npart)
     if ((100*N)/Npart==((double)100*N/Npart))
         cout << (100*N)/Npart << "% completed" << endl;
 }
+
+
 
 void matlab_write_geometry(reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdrs * per, sources * src, detector_array_T * Td, detector_array_H * Hd, const char * filename)
 {// this function writes a .m file that may be run in matlab to draw the geometry of the problem of interest
@@ -2197,7 +3363,7 @@ void matlab_write_geometry(reflective_bdrs * ref, prescribed_bdrs * presc, perio
     file << "hb(i) = fill(BDdata(i,1:2:8),BDdata(i,2:2:8),'g','EdgeColor','none');" << endl;
     file << "end" << endl;
     file << "for i=1:" << src->Nv << endl;
-    file << "hv(i) = fill(VOLdata(i,1:2:8),VOLdata(i,2:2:8),'r',LineWidth',2);" << endl;
+    file << "hv(i) = fill(VOLdata(i,1:2:8),VOLdata(i,2:2:8),'r','LineWidth',2);" << endl;
     file << "end" << endl;
     file << "for i=1:" << src->Ni << endl;
     file << "hi(i) = fill(INITdata(i,1:2:8),INITdata(i,2:2:8),'y','EdgeColor','none');" << endl;
@@ -2224,8 +3390,6 @@ void matlab_write_geometry(reflective_bdrs * ref, prescribed_bdrs * presc, perio
 
 }
 
-
-
 int main()
 {
     //INITIALIZE INPUTS
@@ -2236,6 +3400,7 @@ int main()
 	RandomClass r;
 	r.initialize(seed);
 
+    string SIMU_TYPE;
 	int NPARTICLES, MAXIMUM_COLL;
 	double TEQ;
 	ifstream file;
@@ -2245,10 +3410,12 @@ int main()
 	}
 	else
     {
+        file >> SIMU_TYPE;  //case sensitive
 	    file >> NPARTICLES;
 		file >> MAXIMUM_COLL;
 		file >> TEQ;
 	}
+
     // READ GEOMETRY FILES
 	reflective_bdrs ref("reflective.txt");
 	ref.show();
@@ -2261,53 +3428,109 @@ int main()
 	materials Si("dataSi.txt", TEQ);
 	Si.show_all();
 
-	// READ SOURCE FILES
-	sources src(&Si, &presc, "volumetric.txt", "body_force.txt", "initial.txt", NPARTICLES);
-	src.display_type();
-	cout << src.Np << endl;
-	cout << src.Nv << endl;
-    cout << src.Nb << endl;
-	cout << src.Ni << endl;
-	src.display_vol();
-	src.display_bod();
-	src.display_init();
+    // DECLARE AND READ THE HEAT FLUX AND TEMPERATURE DETECTORS
+    detector_array_H H_detect("H_detectors.txt", "times.txt");
+    detector_array_T T_detect("T_detectors.txt", "times.txt");
 
+    // PRINT GEOMETRY IN FILE
     particle part(MAXIMUM_COLL);
 
-	// DECLARE AND READ THE HEAT FLUX AND TEMPERATURE DETECTORS
-	detector_array_H H_detect("H_detectors.txt", "times.txt");
-	detector_array_T T_detect("T_detectors.txt", "times.txt");
-	matlab_write_geometry(&ref, &presc, &per, &src, &T_detect, &H_detect, "geometry.m");
-	H_detect.show();
-	cout << endl;
-	T_detect.show();
+    // READ SOURCE FILES
+    sources src(&Si, &presc, "volumetric.txt", "body_force.txt", "initial.txt", NPARTICLES);
+	src.display_type();
+    cout << src.Np << endl;
+	cout << src.Nv << endl;
+    cout << src.Nb << endl;
+    cout << src.Ni << endl;
+    src.display_vol();
+    src.display_bod();
+    src.display_init();
 
-	// LOOP OVER PARTICLES
-	for (int i=0; i<src.Npart; i++){
-    print_percent(i, src.Npart);
+    matlab_write_geometry(&ref, &presc, &per, &src, &T_detect, &H_detect, "geometry.m");
 
-		src.emit(&part,&r);
-  //     cout << part.t << " " << src.t_max << endl;
-		while (part.alive){
-            part.initiate_move(&r);
+    if (strcmp(SIMU_TYPE.c_str(),"BOTH")==0 || strcmp(SIMU_TYPE.c_str(),"BACKWARD")==0 || strcmp(SIMU_TYPE.c_str(),"ADJOINT")==0)
+    {
 
-            part.move(&ref, &presc, &per);
+        // READ SOURCE FILES
+	    sources src_adj(&Si, "T_detectors.txt", "H_detectors.txt", NPARTICLES);
 
-			H_detect.measure(&part);
-			T_detect.measure(&part, &Si);
+    	adjoint_detectors adj_det(&presc, "volumetric.txt", "body_force.txt", "initial.txt", "times.txt", &src_adj);
+	    src.display_type();
 
-            part.finish_move(&Si,&r, &ref, &presc, &per);
+	    H_detect.show();
+	    cout << endl;
+	    T_detect.show();
 
-		}
+	    cout << endl << "STARTING ADJOINT SIMULATION" << endl;
 
-	}
-    // DISPLAY RESULTS IN TERMINAL AND RECORD THEM
-	H_detect.show_results();
-	H_detect.write("results_H.txt");
-	T_detect.show_results();
-	T_detect.write("results_T.txt");
+	    // LOOP OVER PARTICLES
+	    cout << src_adj.Nv << endl;
+	    while (src_adj.not_empty) {
+            if (src_adj.remaining_particles[src_adj.src_parser]==1){
+                cout << src_adj.src_parser + 1 << " out of " << src_adj.Ntot << " adjoint sources " << endl;
+            }
 
-	return 0;
+
+		    src_adj.emit_adjoint(&part,&r);
+
+		    while (part.alive){
+                part.initiate_move(&r);
+
+                part.move(&ref, &presc, &per);
+
+			    //H_detect.measure(&part);
+			    //T_detect.measure(&part, &Si);
+                adj_det.measure(&part, &src_adj);
+                part.finish_move(&Si,&r, &ref, &presc, &per);
+
+		    }
+
+	    }
+        // DISPLAY RESULTS IN TERMINAL AND RECORD THEM
+        adj_det.show_results();
+        adj_det.write("adj_T_results.txt","adj_H_results.txt");
+        //cout << adj_det.Nt <<endl;
+        //cout << "displaying pointers" << endl;
+        //cout << adj_det.steady_H << " " << adj_det.steady_T+11 << " " << src_adj.cumul_energies+100 <<endl;
+    }
+
+double TEST = 0;
+    if (strcmp(SIMU_TYPE.c_str(),"BOTH")==0 || strcmp(SIMU_TYPE.c_str(),"FORWARD")==0 || strcmp(SIMU_TYPE.c_str(),"REGULAR")==0 || strcmp(SIMU_TYPE.c_str(),"DIRECT")==0)
+    {
+
+        H_detect.show();
+        cout << endl;
+        T_detect.show();
+        cout << endl << "STARTING FORWARD SIMULATION" << endl;
+        // LOOP OVER PARTICLES
+        for (int i=0; i<src.Npart; i++){
+        print_percent(i, src.Npart);
+
+            src.emit(&part,&r);
+            if (0<part.pt0.x && part.pt0.x<1e-7 && 0<part.pt0.y && part.pt0.y<1e-7)
+                TEST = TEST + part.weight/Si.C/1e-14;
+     //     cout << part.t << " " << src.t_max << endl;
+            while (part.alive){
+                part.initiate_move(&r);
+
+                part.move(&ref, &presc, &per);
+
+                H_detect.measure(&part);
+                T_detect.measure(&part, &Si);
+
+                part.finish_move(&Si,&r, &ref, &presc, &per);
+
+            }
+
+        }
+        // RECORD RESULTS
+        H_detect.write("results_H.txt");
+        T_detect.write("results_T.txt");
+        // DISPLAYING RESULTS
+        H_detect.show_results();
+        T_detect.show_results();
+    }
+    return 0;
 
 
 }
