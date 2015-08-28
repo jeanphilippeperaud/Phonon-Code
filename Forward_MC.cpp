@@ -218,7 +218,7 @@ prescribed::prescribed(double x1, double y1, double x2, double y2, double T, dou
 
 class periodic: public segment{
 public:
-	periodic(){};
+    periodic(){};
     periodic(double x1, double y1, double x2, double y2, double shiftx, double shifty);
     point vctr; // this stores the two translation coordinates to be applied to a particle when it hits this wall
 };
@@ -256,7 +256,7 @@ point emit_from_segment(segment seg,RandomClass * r)
 class quadrilater{ //class that describes a 2D region, calculates and stores its area
 	// segments/points must be organized such that it rotates in the direct sense
 public:
-	quadrilater(){};
+    quadrilater(){};
     quadrilater(segment segment1, segment segment2, segment segment3, segment segment4);
     quadrilater(point pt1, point pt2, point pt3, point pt4);
     segment segs[4];
@@ -672,10 +672,10 @@ periodic_bdrs::~periodic_bdrs()
 class materials
 {
 public:
-    materials(const char* filename, double Teq); // initialize with file of material properties
-    ~materials();
-    // including frequencies, densities of states, velocities, relaxation times, Delta frequencies, polarizations.
-    // IMPORTANT NOTE: the factor 2 of the TA modes must already be included in the corresponding densities of state.
+        materials(const char* filename, double Teq); // initialize with file of material properties
+        ~materials();
+        // including frequencies, densities of states, velocities, relaxation times, Delta frequencies, polarizations.
+        // IMPORTANT NOTE: the factor 2 of the TA modes must already be included in the corresponding densities of state.
 	int Nm; //total number of modes
 	double C; //heat capacity
 	double * F; //frequencies
@@ -815,7 +815,7 @@ materials::~materials()
 
 void materials::show_all()
 {
-    cout << "number of frequency cells: " << Nm << endl;
+        cout << "number of frequency cells: " << Nm << endl;
 	cout << "Boltzmann constant: " << boltz << endl;
 	cout << "reduced Planck constant: " << hbar << endl;
 	cout << "RAW DATA: " << endl;
@@ -846,32 +846,31 @@ void materials::show_all()
 
 	 particle(){COLL_MAX = 10;}
 	 particle(int Collm){COLL_MAX = Collm;}
-     int sig; // sign of particle, 1 or -1
+         int sig; // sign of particle, 1 or -1
 	 int mode_index;
-     point pt0;
-     point pt1;
-     double tau; //current relaxation time
-     int pol; // current polarization
+         point pt0;
+         point pt1;
+         double tau; //current relaxation time
+         int pol; // current polarization
 	 double V; //norm of velocity
-     point Vp0; // velocity (2D vector)
-     point Vp1;
-     double t; // particle's internal time.
+         point Vp0; // velocity (2D vector)
+         point Vp1;
+         double t; // particle's internal time.
 	 double Dt; // records the time to next scattering event
-     double weight; //particle's weight
-     int counter; // counts the number of times the particle has moved
+         double weight; //particle's weight
+         int counter; // counts the number of times the particle has moved
 	 int COLL_MAX;
-     bool alive; // indicates whether the particle is still active or terminated
-     segment seg; // segment used for processing trajectories and collisions with boundaries
-     int collision_type; // 0= sca1 = reflection; 2 = prescribed (absorption); 3 = periodic --- useful for function "finish_move".
+         bool alive; // indicates whether the particle is still active or terminated
+         segment seg; // segment used for processing trajectories and collisions with boundaries
+         int collision_type; // 0= sca1 = reflection; 2 = prescribed (absorption); 3 = periodic --- useful for function "finish_move".
 	 int collision_index; // to record which boundary was hit
-     void initiate_move(RandomClass* r); // starts the move without looking at boundaries, and assigns seg
-     void move(reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdrs * per); // uses the information in seg to locate the target point after considering boundaries
-     // UPDATES seg (needed for detectors)
+         void initiate_move(RandomClass* r); // starts the move without looking at boundaries, and assigns seg
+         void move(reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdrs * per); // uses the information in seg to locate the target point after considering boundaries
+        // UPDATES seg (needed for detectors)
 
-     void finish_move(materials * mat, RandomClass * r,reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdrs * per);
-
+         void finish_move(materials * mat, RandomClass * r,reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdrs * per);
 	 void show_all();
-     bool P_inside_quad(quadrilater quad);
+         bool P_inside_quad(quadrilater quad);
  };
 
 
@@ -1089,8 +1088,8 @@ initial::initial(point pt1, point pt2, point pt3, point pt4, double T, double Te
     center.x = (pt1.x + pt2.x + pt3.x + pt4.x)/4;
     center.y = (pt1.y + pt2.y + pt3.y + pt4.y)/4;
 
-	temp = T;
-	temp_eq = Teq;
+    temp = T;
+    temp_eq = Teq;
 
 }
 
@@ -1126,7 +1125,7 @@ body_force::body_force(point pt1, point pt2, point pt3, point pt4, point grad)
     center.x = (pt1.x + pt2.x + pt3.x + pt4.x)/4;
     center.y = (pt1.y + pt2.y + pt3.y + pt4.y)/4;
 
-	vctr = grad;
+    vctr = grad;
 
 }
 
@@ -1211,7 +1210,7 @@ detector_T::detector_T(point pt1, point pt2, point pt3, point pt4)
     center.x = (pt1.x + pt2.x + pt3.x + pt4.x)/4;
     center.y = (pt1.y + pt2.y + pt3.y + pt4.y)/4;
 
-	estimate = 0;
+    estimate = 0;
 
 }
 
@@ -1451,7 +1450,7 @@ public:
 	string type;  //TRANSIENT or STEADY
 	detector_T * t_handle; // pointer towards an array of heat flux detectors
 	double * msr_times;
-    int msr_index; // measurement index (for transient cases)
+        int msr_index; // measurement index (for transient cases)
 	void show(); //displays all temperature detectors
 	void show_results();
 	void write(const char * filename); // writes all temperature results in a file
@@ -1508,7 +1507,7 @@ detector_array_T::detector_array_T(const char* filename,const char* filename_tim
 
 			t_handle[i].area = calc_area(t_handle[i].segs[0].point1,t_handle[i].segs[1].point1,t_handle[i].segs[1].point2)
 			+calc_area(t_handle[i].segs[0].point1,t_handle[i].segs[2].point1,t_handle[i].segs[2].point2);
-            if (strcmp(type.c_str(),"TRANSIENT")==0){
+                        if (strcmp(type.c_str(),"TRANSIENT")==0){
 				t_handle[i].estimates = new double[Nt];
 				for (int j = 0; j<Nt; j++){
 			        t_handle[i].estimates[j] = 0;
@@ -1526,7 +1525,7 @@ void detector_array_T::measure(particle * part, materials * mat)
 {
 	double cntrbt = 0;
 
-    if (strcmp(type.c_str(),"TRANSIENT")==0) {
+        if (strcmp(type.c_str(),"TRANSIENT")==0) {
 		// first, we need to spot all measurement times on the path between pt0 and pt1
 		int ilm=msr_index+1;
 		int inm;
@@ -1558,42 +1557,42 @@ void detector_array_T::measure(particle * part, materials * mat)
 				msr_index=inm;
 			}
 			if (part->t + part->Dt > msr_times[Nt-1])
-            {
-                msr_index = -1; // only for transient cases: reset the msr_index
-                part->alive = 0; // "kill" the particle
-            }
+                        {
+                                msr_index = -1; // only for transient cases: reset the msr_index
+                                part->alive = 0; // "kill" the particle
+                        }
 */
-        for (int j = 0; j<Nt; j++){
-            if (msr_times[j] >=part->t && msr_times[j] < part->t+part->Dt){
-                tpositions=msr_times[j];
-                pt.x = part->pt0.x + part->Vp0.x*(tpositions-part->t);
-                pt.y = part->pt0.y + part->Vp0.y*(tpositions-part->t);
-                // check whether the particle would be in any of the detectors at these moments
-                for (int i = 0; i<N; i++)
-                {
-                    if (inside_quad(pt, t_handle[i])){
+                for (int j = 0; j<Nt; j++){
+                        if (msr_times[j] >=part->t && msr_times[j] < part->t+part->Dt){
+                        tpositions=msr_times[j];
+                        pt.x = part->pt0.x + part->Vp0.x*(tpositions-part->t);
+                        pt.y = part->pt0.y + part->Vp0.y*(tpositions-part->t);
+                        // check whether the particle would be in any of the detectors at these moments
+                        for (int i = 0; i<N; i++)
+                        {
+                                if (inside_quad(pt, t_handle[i])){
 
-                        t_handle[i].estimates[j] = t_handle[i].estimates[j] + part->weight*part->sig/t_handle[i].area/mat->C;
+                                        t_handle[i].estimates[j] = t_handle[i].estimates[j] + part->weight*part->sig/t_handle[i].area/mat->C;
 
-				    }
+			        }
 
+                        }
                 }
-            }
         }
         if (part->t + part->Dt > msr_times[Nt-1])
-            {
-                msr_index = -1; // only for transient cases: reset the msr_index
-                part->alive = 0; // "kill" the particle
-            }
+                {
+                        msr_index = -1; // only for transient cases: reset the msr_index
+                        part->alive = 0; // "kill" the particle
+                 }
 	}
 	else{
-	    for (int i = 0; i<N; i++){ // go over all T detectors and analyze interaction with particle segment
-		    if (overlap_quad(part->seg, t_handle[i])) {
-		        cntrbt = overlap_length(part->seg, t_handle[i]); //this just gives a length
-		        t_handle[i].estimate = t_handle[i].estimate + part->sig*part->weight*
-		    	cntrbt/t_handle[i].area/mat->C/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y); // IMPORTANT: SINCE IT IS 2D, DO NOT USE part->V for norm of velocity
-		    }
-	    }
+	        for (int i = 0; i<N; i++){ // go over all T detectors and analyze interaction with particle segment
+		        if (overlap_quad(part->seg, t_handle[i])) {
+		                cntrbt = overlap_length(part->seg, t_handle[i]); //this just gives a length
+		                t_handle[i].estimate = t_handle[i].estimate + part->sig*part->weight*
+		    	        cntrbt/t_handle[i].area/mat->C/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y); // IMPORTANT: SINCE IT IS 2D, DO NOT USE part->V for norm of velocity
+		        }
+	        }
 	}
 }
 
@@ -1711,7 +1710,7 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 		cout << "maximum simulation time: " << t_max << " s" << endl;
 	}
 	const char * local_type = type.c_str();
-    file.close();
+        file.close();
 	// pointer to the prescribed sources
 	ptr_to_presc = presc;
 	Np = presc->N;
@@ -1722,11 +1721,11 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 		sprd_src_array = NULL;
 	}
 	else
-    {
+        {
 	    file >> Nv; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
 	    sprd_src_array = new volumetric[Nv];
 	    for (int i = 0; i<Nv; i++){
-		    file >> sprd_src_array[i].segs[0].point1.x;
+		        file >> sprd_src_array[i].segs[0].point1.x;
 			file >> sprd_src_array[i].segs[0].point1.y;
 
 			file >> sprd_src_array[i].segs[1].point1.x;
@@ -1772,7 +1771,7 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 		bd_frc_array = NULL;
 	}
 	else
-    {
+        {
 	    file >> Nb; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
 	    bd_frc_array = new body_force[Nb];
 	    for (int i = 0; i<Nb; i++){
@@ -1822,7 +1821,7 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 		initial_condition = NULL;
 	}
 	else
-    {
+        {
 	    file >> Ni; //THE FIRST NUMBER SHOULD BE THE NUMBER OF SOURCES
 	    initial_condition = new initial[Ni];
 	    for (int i = 0; i<Ni; i++){
@@ -1946,7 +1945,7 @@ sources::sources(materials * mat, prescribed_bdrs * presc, const char * vol, con
 
 
 void sources::display_vol(){
-    for (int i=0; i<Nv; i++)
+        for (int i=0; i<Nv; i++)
 	{
 		cout << sprd_src_array[i].segs[0].point1.x << " " << sprd_src_array[i].segs[0].point1.y << " "
 		<< sprd_src_array[i].segs[0].point2.x << " " << sprd_src_array[i].segs[0].point2.y << " "
@@ -1962,7 +1961,7 @@ void sources::display_vol(){
 }
 
 void sources::display_bod(){
-    for (int i=0; i<Nb; i++)
+        for (int i=0; i<Nb; i++)
 	{
 		cout << bd_frc_array[i].segs[0].point1.x << " " << bd_frc_array[i].segs[0].point1.y << " "
 		<< bd_frc_array[i].segs[0].point2.x << " " << bd_frc_array[i].segs[0].point2.y << " "
@@ -1978,7 +1977,7 @@ void sources::display_bod(){
 }
 
 void sources::display_init(){
-    for (int i=0; i<Ni; i++)
+        for (int i=0; i<Ni; i++)
 	{
 		cout << initial_condition[i].segs[0].point1.x << " " << initial_condition[i].segs[0].point1.y << " "
 		<< initial_condition[i].segs[0].point2.x << " " << initial_condition[i].segs[0].point2.y << " "
@@ -2244,8 +2243,8 @@ int main()
 		cout << "NO INPUT FILE" << endl;
 	}
 	else
-    {
-	    file >> NPARTICLES;
+        {
+	        file >> NPARTICLES;
 		file >> MAXIMUM_COLL;
 		file >> TEQ;
 	}
@@ -2266,13 +2265,13 @@ int main()
 	src.display_type();
 	cout << src.Np << endl;
 	cout << src.Nv << endl;
-    cout << src.Nb << endl;
+        cout << src.Nb << endl;
 	cout << src.Ni << endl;
 	src.display_vol();
 	src.display_bod();
 	src.display_init();
 
-    particle part(MAXIMUM_COLL);
+        particle part(MAXIMUM_COLL);
 
 	// DECLARE AND READ THE HEAT FLUX AND TEMPERATURE DETECTORS
 	detector_array_H H_detect("H_detectors.txt", "times.txt");
@@ -2284,19 +2283,19 @@ int main()
 
 	// LOOP OVER PARTICLES
 	for (int i=0; i<src.Npart; i++){
-    print_percent(i, src.Npart);
+                print_percent(i, src.Npart);
 
 		src.emit(&part,&r);
   //     cout << part.t << " " << src.t_max << endl;
 		while (part.alive){
-            part.initiate_move(&r);
+                        part.initiate_move(&r);
 
-            part.move(&ref, &presc, &per);
+                        part.move(&ref, &presc, &per);
 
 			H_detect.measure(&part);
 			T_detect.measure(&part, &Si);
 
-            part.finish_move(&Si,&r, &ref, &presc, &per);
+                        part.finish_move(&Si,&r, &ref, &presc, &per);
 
 		}
 
