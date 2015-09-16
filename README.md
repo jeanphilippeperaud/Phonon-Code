@@ -4,7 +4,7 @@ A code to simulate linearized phonon transport
 This code is a tool for solving the linearized phonon Boltzmann equation in the relaxation time approximation, in 2D.
 In the present version, the user specifies the geometry, the source terms, the "detectors" and various inputs (number of particles, temperature of linearization). The code returns the Monte Carlo estimates obtained with the desired number of particles.
 
-This code is Open Source and provided freely. We shall appreciate if scientific work done using this code contains an explicit acknoledgement and the following references which served as a basis for this code:
+This code is Open Source and provided freely. We shall appreciate if scientific work done using this code contains an explicit acknowledgement and the following references which served as a basis for this code:
 
 <p><img src="../../Publications/whiteball.gif" alt="" align="bottom">
 J-P. P&eacuteraud and N. G. Hadjiconstantinou,
