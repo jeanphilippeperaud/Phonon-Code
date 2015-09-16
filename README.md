@@ -4,6 +4,19 @@ A code to simulate linearized phonon transport
 This code is a tool for solving the linearized phonon Boltzmann equation in the relaxation time approximation, in 2D.
 In the present version, the user specifies the geometry, the source terms, the "detectors" and various inputs (number of particles, temperature of linearization). The code returns the Monte Carlo estimates obtained with the desired number of particles.
 
+This code is Open Source and provided freely. We shall appreciate if scientific work done using this code contains an explicit acknoledgement and the following references which served as a basis for this code:
+
+<p><img src="../../Publications/whiteball.gif" alt="" align="bottom">
+J-P. P&eacuteraud and N. G. Hadjiconstantinou,
+<b>"An alternative approach to efficient simulation of micro/nanoscale phonon transport"</b>,
+<em>Applied Physics Letters,</em> <b>101</b>, 153114, 2012.
+</p>
+
+<p><img src="../../Publications/whiteball.gif" alt="" align="bottom">
+J-P. P&eacuteraud and N. G. Hadjiconstantinou,
+<b>"Efficient simulation of multidimensional phonon transport using energy-based variance-reduced Monte Carlo formulations"</b>,
+<em>Physical Review B,</em> <b>84</b>, 205331, 2011.
+
 # Compiling and runnning
 Executables are provided in this release. If it doesn't work you will have to compile the file "forward_MC.cpp".
 To compile, you will need to include a path to the boost library. Here is a URL for downloading the library: https://www.dropbox.com/sh/0vx58yglpijt3u2/AAD3fwT4B5Mfy6MeYoisXH2xa?dl=0 .
