@@ -7,13 +7,13 @@ In the present version, the user specifies the geometry, the source terms, the "
 This code is Open Source and provided freely. We shall appreciate if scientific work done using this code contains an explicit acknowledgement and the following references which served as a basis for this code:
 
 <p><img src="../../Publications/whiteball.gif" alt="" align="bottom">
-J-P. P&eacuteraud and N. G. Hadjiconstantinou,
+J-P. Péraud and N. G. Hadjiconstantinou,
 <b>"An alternative approach to efficient simulation of micro/nanoscale phonon transport"</b>,
 <em>Applied Physics Letters,</em> <b>101</b>, 153114, 2012.
 </p>
 
 <p><img src="../../Publications/whiteball.gif" alt="" align="bottom">
-J-P. P&eacuteraud and N. G. Hadjiconstantinou,
+J-P. Péraud and N. G. Hadjiconstantinou,
 <b>"Efficient simulation of multidimensional phonon transport using energy-based variance-reduced Monte Carlo formulations"</b>,
 <em>Physical Review B,</em> <b>84</b>, 205331, 2011.
 
