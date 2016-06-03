@@ -1157,7 +1157,7 @@ detector_H::detector_H(point pt1, point pt2, point pt3, point pt4, point grad) /
 
 
     vctr.x = grad.x/sqrt(grad.x*grad.x+grad.y*grad.y);
-    vctr.x = grad.y/sqrt(grad.x*grad.x+grad.y*grad.y);
+    vctr.y = grad.y/sqrt(grad.x*grad.x+grad.y*grad.y);
 
     // calculate area
     area = calc_area(segs[0].point1,segs[1].point1,segs[1].point2)
