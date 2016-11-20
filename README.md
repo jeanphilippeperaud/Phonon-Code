@@ -18,8 +18,9 @@ J-P. Péraud and N. G. Hadjiconstantinou,
 <em>Physical Review B,</em> <b>84</b>, 205331, 2011.
 
 # Compiling and running
-Executables are provided in this release. If it doesn't work you will have to compile the file "forward_MC.cpp".
-To compile, you will need to include a path to the boost library. Here is a URL for downloading the library: https://www.dropbox.com/sh/0vx58yglpijt3u2/AAD3fwT4B5Mfy6MeYoisXH2xa?dl=0 .
+Typing "make" in the command line should most of the time compile the code and output an executable named "MC.out".
+Note that the compiler requires the use of the boost library. For convenience, all the files of the boost library that are needed for compiling are provided (in directory boost_dir/ ).
+The complete boost library is available at www.boost.org . I am in no way affiliated to boost.org .
 Once compiled, you may run Example 1 by placing the executable in the Example 1 folder and running it from there. The calculation will produce two files (results_T.txt and results_H.txt) as outputs.
 
 
