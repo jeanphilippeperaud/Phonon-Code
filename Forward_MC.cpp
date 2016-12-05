@@ -61,7 +61,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <math.h>
 #include "randomClass.h"
 
-#define multiply(a,b) a*b
 using namespace std;
 double PI = 3.14159265;
 
