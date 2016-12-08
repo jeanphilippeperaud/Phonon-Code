@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2015, Jean-Philippe M. Péraud
+Copyright (c) 2016, Jean-Philippe M. Péraud
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
