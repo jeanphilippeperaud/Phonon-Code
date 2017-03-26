@@ -2112,8 +2112,8 @@ double fl(double x, double LX, int N) // "modulo" function (for debugging purpos
 // function used for printing the degree of completion in the main function
 void print_percent(int N, int Npart)
 {
-    if ((100*N)/Npart==((double)100*N/Npart))
-        cout << (100*N)/Npart << "% completed" << endl;
+    if ((100*(long long)N) % Npart ==0)
+        cout << (100*(long long)N)/Npart << "% completed" << endl;
 }
 
 void matlab_write_geometry(reflective_bdrs * ref, prescribed_bdrs * presc, periodic_bdrs * per, sources * src, detector_array_T * Td, detector_array_H * Hd, const char * filename)
