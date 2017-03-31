@@ -64,6 +64,11 @@ In both cases, the estimates appear as a single column if the calculation is ste
 # Examples
 There currently are two examples in the repository, respectively in directory "Example1" and "thin-film". 
 
+# Visualization
+In folder "Tools", the python script "draw.py" should (normally) show you your detectors along with the associated temperature.
+After you have run the simulation. Place the python file in your simulation folder, then type "python draw.py".
+Note: this requires the matplotlib library (matplotlib.org)
+
 # Troubleshoot, frequent mistakes and comments
 
 It is advised to double check if the geometry is well defined and if all boundaries coherently assemble to define the compuational domain. The latest update of the source file Forward_MC.cpp includes a small function which outputs a "geometry.m" file which the user can run in matlab and which will plot the geometry that was entered in the simulation. With this tool, one may check the correct spatial definition of the boundaries, sources and detectors.
