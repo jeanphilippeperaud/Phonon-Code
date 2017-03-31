@@ -68,7 +68,7 @@ There currently are two examples in the repository, respectively in directory "E
 In folder "Tools", the python script "draw.py" should (normally) show you your detectors along with the associated temperature.
 After you have run the simulation. Place the python file in your simulation folder, then type "python draw.py".
 Limited to steady-state cases for now.
-Note: this requires the matplotlib library (matplotlib.org) and numpy (www.numpy.org)
+Note: this requires the matplotlib library (www.matplotlib.org) and numpy (www.numpy.org)
 
 # Troubleshoot, frequent mistakes and comments
 
