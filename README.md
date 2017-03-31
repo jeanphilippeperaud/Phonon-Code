@@ -67,3 +67,11 @@ There currently are two examples in the repository, respectively in directory "E
 # Troubleshoot, frequent mistakes and comments
 
 It is advised to double check if the geometry is well defined and if all boundaries coherently assemble to define the compuational domain. The latest update of the source file Forward_MC.cpp includes a small function which outputs a "geometry.m" file which the user can run in matlab and which will plot the geometry that was entered in the simulation. With this tool, one may check the correct spatial definition of the boundaries, sources and detectors.
+
+# Running an "adjoint" simulation
+You need to compile "adjoint_MC.cpp" with "g++ -I boost_dir adjoint_MC.cpp -o adj.out" .
+Move the executable adj.out to the folder in which your input files are located.
+At line 1 of "input.txt", indicate "ADJOINT". Line 2 is then the total number of particles to be used, line 3 is the max number of collisions and line 4 is the linearization temperature.
+IMPORTANT NOTE: this is still an early version, far from being thoroughly tested.
+
+
