@@ -59,3 +59,56 @@ point emit_from_segment(segment seg,RandomClass * r)
     pt.y = seg.point1.y+R1*(seg.point2.y-seg.point1.y);
     return pt;
 }
+
+int intrsct_test(segment segmentab, segment segment12) //tests whether two ORIENTED segments intersect
+{ //important: segmentab is a trajectory segment; segment12 is a boundary (any type);
+  //return +1 if the collision is "direct" (determinant of vectors>0), -1 if indirect, 0 if no collision
+	double dtr = det(segmentab, segment12);
+
+	double t, s; // represent normalized coordinates on the two segments
+	if (dtr!=0)
+	{
+		t = ((segmentab.point1.y - segment12.point1.y)*(segment12.point2.x - segment12.point1.x)
+			 -(segmentab.point1.x - segment12.point1.x)*(segment12.point2.y - segment12.point1.y))/dtr;
+		s = -((segment12.point1.y - segmentab.point1.y)*(segmentab.point2.x - segmentab.point1.x)
+			 -(segment12.point1.x - segmentab.point1.x)*(segmentab.point2.y - segmentab.point1.y))/dtr;
+		if (0<=t && t<=1 && 0<=s && s<=1)
+		{
+			if (dtr>0)
+			{	return 1;}else{return -1;}
+
+		}
+		else {
+			return 0;
+		}
+
+	}
+	else {
+		return 0;
+	}
+
+}
+
+point intrsct_pt(segment segmentab, segment segment12) //calculates the intersection point between two ORIENTED segments intersect
+{ //important: needs to be used along with intrsct_pt to check if the intersection exists
+	double dtr = det(segmentab, segment12);
+	point pt;
+	double t, s; // represent normalized coordinates on the two segments
+
+	if (dtr!=0)
+	{
+		t = ((segmentab.point1.y - segment12.point1.y)*(segment12.point2.x - segment12.point1.x)
+			 -(segmentab.point1.x - segment12.point1.x)*(segment12.point2.y - segment12.point1.y))/dtr;
+		s = -((segment12.point1.y - segmentab.point1.y)*(segmentab.point2.x - segmentab.point1.x)
+			  -(segment12.point1.x - segmentab.point1.x)*(segmentab.point2.y - segmentab.point1.y))/dtr;
+
+		pt.x = segmentab.point1.x+(segmentab.point2.x-segmentab.point1.x)*t;
+		pt.y = segmentab.point1.y+(segmentab.point2.y-segmentab.point1.y)*t;
+	}
+	return pt;
+
+}
+
+double dist_to_intrsct(segment segmentab,point pt){ // calculates the distance between starting point of segment and a point (to be used with previous functions above)
+	return sqrt((pt.x-segmentab.point1.x)*(pt.x-segmentab.point1.x)+(pt.y-segmentab.point1.y)*(pt.y-segmentab.point1.y));
+}
