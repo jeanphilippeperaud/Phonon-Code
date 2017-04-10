@@ -1,0 +1,1 @@
+class initial: public quadrilater

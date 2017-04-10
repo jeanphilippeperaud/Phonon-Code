@@ -25,46 +25,37 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef UTILS_H
-#define UTILS_H
-
-#include "RandomClass.h"
+#ifndef QUADRILATER_H
+#define QUADRILATER_H
 #include "segment.h"
+#include "utils.h"
 
-class segment;
-
-struct point{
-    double x;
-    double y;
+class quadrilater{ //class that describes a 2D region, calculates and stores its area
+	// segments/points must be organized such that it rotates in the direct sense
+public:
+    quadrilater(){};
+    quadrilater(segment segment1, segment segment2, segment segment3, segment segment4);
+    quadrilater(point pt1, point pt2, point pt3, point pt4);
+    segment segs[4];
+    double area;
+    point center;
 };
 
-double det(double ax, double ay, double bx, double by){return ax*by-ay*bx;}
-
-double calc_area(point pt1, point pt2, point pt3){return det(pt2.x-pt1.x, pt2.y-pt1.y, pt3.x-pt1.x, pt3.y-pt1.y)/2;}
-
-double dist_pts(point pt1, point pt2)
-{
-	return sqrt((pt2.x-pt1.x)*(pt2.x-pt1.x)+(pt2.y-pt1.y)*(pt2.y-pt1.y));
-}
-
-point emit_from_triangle(point pt1, point pt2, point pt3,RandomClass * r);
-
-int choose(RandomClass * r, double norm_cumul[],int N_interv);
-
-double det(segment seg1, segment seg2);
-
-point emit_from_segment(segment seg,RandomClass * r);
 
 int intrsct_test(segment segmentab, segment segment12);
-//tests whether two ORIENTED segments intersect
-//important: segmentab is a trajectory segment; segment12 is a boundary (any type);
-//return +1 if the collision is "direct" (determinant of vectors>0), -1 if indirect, 0 if no collision
-
 point intrsct_pt(segment segmentab, segment segment12);
-//calculates the intersection point between two ORIENTED segments intersect
-//important: needs to be used along with intrsct_pt to check if the intersection exists
 
-double dist_to_intrsct(segment segmentab,point pt); // calculates the distance between starting point of segment and a point (to be used with previous functions above)
+bool inside_quad(point pt, quadrilater quad); // checks if point pt is inside quad. IMPORTANT: only works if quad is convex
+
+bool overlap_quad(segment seg, quadrilater quad);
+// tests whether a segment and a quadrilater overlap
+
+double overlap_length(segment seg, quadrilater quad); // calculates the length of segment overlap
+// IMPORTANT: if this function is used although there is no overlap, it can return a non zero value. The function overlap_quad
+// MUST be used before using this function.
+
+point emit_from_quadrilater(quadrilater quad, RandomClass * r);
+// subdivide into 2 triangles and calculate their respective absolute areas
 
 
 #endif

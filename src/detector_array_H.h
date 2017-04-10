@@ -1,0 +1,1 @@
+class detector_array_H
