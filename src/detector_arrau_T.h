@@ -1,1 +1,0 @@
-class detector_array_T
