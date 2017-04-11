@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016, Jean-Philippe M. Péraud
+Copyright (c) 2017, Jean-Philippe M. Péraud
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,27 +25,40 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef DETECTOR_ARRAY_H_H
-#define DETECTOR_ARRAY_H_H
-
-#include "particle.h"
-#include "detector_H.h"
+#include "detector_T.h"
 
 
-class detector_array_H { // class that handles and stores the heat flux detectors
-public:
-	detector_array_H(const char* filename, const char * filename_time);
-	~detector_array_H();
-	void measure(particle * part); // updates all heat flux detectors from particle trajectory
-	int N; // TOTAL number of heat flux detectors
-	int Nt;
-	string type; // TRANSIENT or STEADY
-	detector_H * h_handle; // pointer towards an array of heat flux detectors
-	double * msr_times;
-	int msr_index;
-	void show(); //displays all heat flux detectors
-	void show_results(); // displays all heat flux results
-	void write(const char* filename); // writes all heat flux results in a file
-};
+detector_T::detector_T(point pt1, point pt2, point pt3, point pt4)
+{
+    // assign points to constitutive segments
+    segs[0].point1 = pt1;
+    segs[0].point2 = pt2;
 
-#endif
+    segs[1].point1 = pt2;
+    segs[1].point2 = pt3;
+
+    segs[2].point1 = pt3;
+    segs[2].point2 = pt4;
+
+    segs[3].point1 = pt4;
+    segs[3].point2 = pt1;
+
+    // calculate area
+    area = calc_area(segs[0].point1,segs[1].point1,segs[1].point2)
+	+calc_area(segs[0].point1,segs[2].point1,segs[2].point2);
+
+    // center of the shape
+    center.x = (pt1.x + pt2.x + pt3.x + pt4.x)/4;
+    center.y = (pt1.y + pt2.y + pt3.y + pt4.y)/4;
+
+    estimate = 0;
+
+}
+
+detector_T::~detector_T()
+{
+	if (estimates!=NULL) {
+		delete[] estimates;
+	}
+}
+
