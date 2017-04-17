@@ -27,30 +27,34 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifndef QUADRILATER_H
 #define QUADRILATER_H
-#include "segment.h"
-#include "utils.h"
+
+class segment;
+
+int intrsct_test(segment segmentab, segment segment12);
+point intrsct_pt(segment segmentab, segment segment12);
 
 class quadrilater{ //class that describes a 2D region, calculates and stores its area
 	// segments/points must be organized such that it rotates in the direct sense
 public:
-    quadrilater(){};
+    quadrilater();
     quadrilater(segment segment1, segment segment2, segment segment3, segment segment4);
     quadrilater(point pt1, point pt2, point pt3, point pt4);
-    segment segs[4];
+    segment * segs;
     double area;
     point center;
+    virtual ~quadrilater();
 };
 
 
-extern int intrsct_test(segment segmentab, segment segment12);
-extern point intrsct_pt(segment segmentab, segment segment12);
+/*int intrsct_test(segment segmentab, segment segment12);
+point intrsct_pt(segment segmentab, segment segment12);
+*/
+bool inside_quad(point pt, quadrilater quad); // checks if point pt is inside quad. IMPORTANT: only works if quad is convex
 
-extern bool inside_quad(point pt, quadrilater quad); // checks if point pt is inside quad. IMPORTANT: only works if quad is convex
-
-extern bool overlap_quad(segment seg, quadrilater quad);
+bool overlap_quad(segment seg, quadrilater quad);
 // tests whether a segment and a quadrilater overlap
 
-extern double overlap_length(segment seg, quadrilater quad); // calculates the length of segment overlap
+double overlap_length(segment seg, quadrilater quad); // calculates the length of segment overlap
 // IMPORTANT: if this function is used although there is no overlap, it can return a non zero value. The function overlap_quad
 // MUST be used before using this function.
 

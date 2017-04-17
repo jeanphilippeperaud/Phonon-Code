@@ -29,65 +29,63 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "utils.h"
 #include "quadrilater.h"
 
+quadrilater::quadrilater()
+{
+  segs = new segment[4];
+}
+
 quadrilater::quadrilater(segment segment1, segment segment2, segment segment3, segment segment4)
 {
-    // assign points to constitutive segments
-    segs[0].point1.x = segment1.point1.x;
-    segs[0].point1.y = segment1.point1.y;
-    segs[0].point2.x = segment1.point2.x;
-    segs[0].point2.y = segment1.point2.y;
+  segs = new segment[4];
+  segment seg_input[4] = {segment1, segment2, segment3, segment4};
+  // assign points to constitutive segments
+  for (int i = 0; i<4; i++)
+    {
+      segs[i].point1.x = seg_input[i].point1.x;
+      segs[i].point1.y = seg_input[i].point1.y;
+      segs[i].point2.x = seg_input[i].point2.x;
+      segs[i].point2.y = seg_input[i].point2.y;
+    }
 
-    segs[1].point1.x = segment2.point1.x;
-    segs[1].point1.y = segment2.point1.y;
-    segs[1].point2.x = segment2.point2.x;
-    segs[1].point2.y = segment2.point2.y;
-
-    segs[2].point1.x = segment3.point1.x;
-    segs[2].point1.y = segment3.point1.y;
-    segs[2].point2.x = segment3.point2.x;
-    segs[2].point2.y = segment3.point2.y;
-
-    segs[3].point1.x = segment4.point1.x;
-    segs[3].point1.y = segment4.point1.y;
-    segs[3].point2.x = segment4.point2.x;
-    segs[3].point2.y = segment4.point2.y;
-
-    // calculate area
-    area = calc_area(segs[0].point1,segs[1].point1,segs[1].point2)
-         +calc_area(segs[0].point1,segs[2].point1,segs[2].point2);
-
-    // center of the shape
-    center.x = (segment1.point1.x + segment2.point1.x+segment3.point1.x + segment4.point1.x)/4;
-    center.y = (segment1.point1.y + segment2.point1.y+segment3.point1.y + segment4.point1.y)/4;
-
+  // calculate area
+  area = calc_area(segs[0].point1,segs[1].point1,segs[1].point2)
+    +calc_area(segs[0].point1,segs[2].point1,segs[2].point2);
+  
+  // center of the shape
+  center.x = (seg_input[0].point1.x + seg_input[1].point1.x+seg_input[2].point1.x + seg_input[3].point1.x)/4;
+  center.y = (seg_input[0].point1.y + seg_input[1].point1.y+seg_input[2].point1.y + seg_input[3].point1.y)/4;
+  
 }
 
 quadrilater::quadrilater(point pt1, point pt2, point pt3, point pt4)
 {
-    // assign points to constitutive segments
-    segs[0].point1 = pt1;
-    segs[0].point2 = pt2;
-
-    segs[1].point1 = pt2;
-    segs[1].point2 = pt3;
-
-    segs[2].point1 = pt3;
-    segs[2].point2 = pt4;
-
-    segs[3].point1 = pt4;
-    segs[3].point2 = pt1;
-
-    // calculate area
-    area = calc_area(segs[0].point1,segs[1].point1,segs[1].point2)
-         +calc_area(segs[0].point1,segs[2].point1,segs[2].point2);
-
-    // center of the shape
-    center.x = (pt1.x + pt2.x + pt3.x + pt4.x)/4;
-    center.y = (pt1.y + pt2.y + pt3.y + pt4.y)/4;
+  // assign points to constitutive segments
+  segs[0].point1 = pt1;
+  segs[0].point2 = pt2;
+  
+  segs[1].point1 = pt2;
+  segs[1].point2 = pt3;
+  
+  segs[2].point1 = pt3;
+  segs[2].point2 = pt4;
+  
+  segs[3].point1 = pt4;
+  segs[3].point2 = pt1;
+  
+  // calculate area
+  area = calc_area(segs[0].point1,segs[1].point1,segs[1].point2)
+    +calc_area(segs[0].point1,segs[2].point1,segs[2].point2);
+  
+  // center of the shape
+  center.x = (pt1.x + pt2.x + pt3.x + pt4.x)/4;
+  center.y = (pt1.y + pt2.y + pt3.y + pt4.y)/4;
 
 }
 
-
+quadrilater::~quadrilater()
+{
+  delete[] segs;
+}
 
 bool inside_quad(point pt, quadrilater quad) // checks if point pt is inside quad. IMPORTANT: only works if quad is convex
 {

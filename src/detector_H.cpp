@@ -26,7 +26,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "detector_H.h"
-
+#include "utils.h"
+#include "segment.h"
 
 detector_H::detector_H(point pt1, point pt2, point pt3, point pt4, point grad) // grad is the "imposed" temperature gradient
 {

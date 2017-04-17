@@ -26,7 +26,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "detector_T.h"
-
+#include "utils.h"
+#include "segment.h"
 
 detector_T::detector_T(point pt1, point pt2, point pt3, point pt4)
 {

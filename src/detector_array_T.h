@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017, Jean-Philippe M. Péraud
+Copyright (c) 2016, Jean-Philippe M. Péraud
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,21 +25,27 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef INITIAL_H
-#define INITIAL_H
+#ifndef DETECTOR_ARRAY_T_H
+#define DETECTOR_ARRAY_T_H
 
-#include "utils.h"
-#include "quadrilater.h"
+#include "particle.h"
+#include "detector_T.h"
 
-struct point;
 
-class initial: public quadrilater // for defining initial conditions in the transient case
-{
+class detector_array_T { // class that handles and stores the temperature detectors
 public:
-  initial(){};
-  initial(point pt1, point pt2, point pt3, point pt4, double T, double Teq);
-  double temp;
-  double temp_eq;
+	detector_array_T(const char* filename, const char * filename_time);
+	~detector_array_T();
+	void measure(particle * part, materials * mat); // updates all temperature detectors from particle trajectory
+	int N; // TOTAL number of temperature detectors
+	int Nt; // number of times for measurement
+	string type;  //TRANSIENT or STEADY
+	detector_T * t_handle; // pointer towards an array of heat flux detectors
+	double * msr_times;
+        int msr_index; // measurement index (for transient cases)
+	void show(); //displays all temperature detectors
+	void show_results();
+	void write(const char * filename); // writes all temperature results in a file
 };
 
 #endif

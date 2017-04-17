@@ -3,7 +3,6 @@
 #include "RandomClass.h"
 #include <iostream>
 
-
 point emit_from_triangle(point pt1, point pt2, point pt3,RandomClass * r)
 {
     bool found = 0;

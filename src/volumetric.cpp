@@ -26,6 +26,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "volumetric.h"
+#include "segment.h"
 
 volumetric::volumetric(point pt1, point pt2, point pt3, point pt4, double T, double Teq)
 {

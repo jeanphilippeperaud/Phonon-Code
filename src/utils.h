@@ -29,7 +29,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define UTILS_H
 
 #include "RandomClass.h"
-#include "segment.h"
 
 class segment;
 

@@ -27,12 +27,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "utils.h"
 #include "particle.h"
-#include "detector_array_H.h"
+#include "detector_array_T.h"
 #include <fstream>
 #include "quadrilater.h"
 
-
-detector_array_H::detector_array_H(const char* filename, const char * filename_time)
+detector_array_T::detector_array_T(const char* filename,const char* filename_time)
 {
   ifstream file, filetime;
   file.open(filename);
@@ -53,93 +52,51 @@ detector_array_H::detector_array_H(const char* filename, const char * filename_t
       }
   }
   double vx, vy;
-
-
-
   if (file.fail())
     {
-      cout << "no input file for heat flux detectors" << endl;
+      cout << "no input file for temperature detectors" << endl;
       N=0;
-      h_handle = NULL;
+      t_handle = NULL;
     }
   else {
     file >> N;
-    h_handle = new detector_H[N];
+    t_handle = new detector_T[N];
     for (int i=0; i<N; i++){
-      file >> h_handle[i].segs[0].point1.x;
-      file >> h_handle[i].segs[0].point1.y;
-      file >> h_handle[i].segs[1].point1.x;
-      file >> h_handle[i].segs[1].point1.y;
-      file >> h_handle[i].segs[2].point1.x;
-      file >> h_handle[i].segs[2].point1.y;
-      file >> h_handle[i].segs[3].point1.x;
-      file >> h_handle[i].segs[3].point1.y;
-      file >> vx;
-      file >> vy;
-      h_handle[i].vctr.x = vx/sqrt(vx*vx+vy*vy);
-      h_handle[i].vctr.y = vy/sqrt(vx*vx+vy*vy);
+      file >> t_handle[i].segs[0].point1.x;
+      file >> t_handle[i].segs[0].point1.y;
+      file >> t_handle[i].segs[1].point1.x;
+      file >> t_handle[i].segs[1].point1.y;
+      file >> t_handle[i].segs[2].point1.x;
+      file >> t_handle[i].segs[2].point1.y;
+      file >> t_handle[i].segs[3].point1.x;
+      file >> t_handle[i].segs[3].point1.y;
 
-      h_handle[i].segs[0].point2.x = h_handle[i].segs[1].point1.x;
-      h_handle[i].segs[0].point2.y = h_handle[i].segs[1].point1.y;
-      h_handle[i].segs[1].point2.x = h_handle[i].segs[2].point1.x;
-      h_handle[i].segs[1].point2.y = h_handle[i].segs[2].point1.y;
-      h_handle[i].segs[2].point2.x = h_handle[i].segs[3].point1.x;
-      h_handle[i].segs[2].point2.y = h_handle[i].segs[3].point1.y;
-      h_handle[i].segs[3].point2.x = h_handle[i].segs[0].point1.x;
-      h_handle[i].segs[3].point2.y = h_handle[i].segs[0].point1.y;
+      t_handle[i].segs[0].point2.x = t_handle[i].segs[1].point1.x;
+      t_handle[i].segs[0].point2.y = t_handle[i].segs[1].point1.y;
+      t_handle[i].segs[1].point2.x = t_handle[i].segs[2].point1.x;
+      t_handle[i].segs[1].point2.y = t_handle[i].segs[2].point1.y;
+      t_handle[i].segs[2].point2.x = t_handle[i].segs[3].point1.x;
+      t_handle[i].segs[2].point2.y = t_handle[i].segs[3].point1.y;
+      t_handle[i].segs[3].point2.x = t_handle[i].segs[0].point1.x;
+      t_handle[i].segs[3].point2.y = t_handle[i].segs[0].point1.y;
 
-      h_handle[i].area = calc_area(h_handle[i].segs[0].point1,h_handle[i].segs[1].point1,h_handle[i].segs[1].point2)
-	+calc_area(h_handle[i].segs[0].point1,h_handle[i].segs[2].point1,h_handle[i].segs[2].point2);
-
-      h_handle[i].estimate = 0;
+      t_handle[i].area = calc_area(t_handle[i].segs[0].point1,t_handle[i].segs[1].point1,t_handle[i].segs[1].point2)
+	+calc_area(t_handle[i].segs[0].point1,t_handle[i].segs[2].point1,t_handle[i].segs[2].point2);
       if (strcmp(type.c_str(),"TRANSIENT")==0){
-	h_handle[i].estimates = new double[Nt];
+	t_handle[i].estimates = new double[Nt];
 	for (int j = 0; j<Nt; j++){
-	  h_handle[i].estimates[j] = 0;
+	  t_handle[i].estimates[j] = 0;
 	}
       }
       else {
-	h_handle[i].estimate = 0;
+	t_handle[i].estimate = 0;
       }
+
     }
   }
 }
 
-void detector_array_H::show()
-{
-  for (int i = 0; i<N ; i++){
-    cout << h_handle[i].segs[0].point1.x << " " << h_handle[i].segs[0].point1.y << " "
-	 << h_handle[i].segs[0].point2.x << " " << h_handle[i].segs[0].point2.y << " "
-	 << h_handle[i].segs[1].point1.x << " " << h_handle[i].segs[1].point1.y << " "
-	 << h_handle[i].segs[1].point2.x << " " << h_handle[i].segs[1].point2.y << " "
-	 << h_handle[i].segs[2].point1.x << " " << h_handle[i].segs[2].point1.y << " "
-	 << h_handle[i].segs[2].point2.x << " " << h_handle[i].segs[2].point2.y << " "
-	 << h_handle[i].segs[3].point1.x << " " << h_handle[i].segs[3].point1.y << " "
-	 << h_handle[i].segs[3].point2.x << " " << h_handle[i].segs[3].point2.y << " "
-	 << h_handle[i].vctr.x << " " << h_handle[i].vctr.y  << endl;
-
-  }
-}
-
-
-void detector_array_H::show_results()
-{
-  for (int i = 0; i<N ; i++){
-    cout << h_handle[i].estimate << endl;
-
-  }
-}
-
-
-detector_array_H::~detector_array_H()
-{
-  delete[] h_handle;
-  if (msr_times!=NULL) {
-    delete[] msr_times;
-  }
-}
-
-void detector_array_H::measure(particle * part)
+void detector_array_T::measure(particle * part, materials * mat)
 {
   double cntrbt = 0;
 
@@ -149,7 +106,6 @@ void detector_array_H::measure(particle * part)
     int inm;
     double tpositions;
     point pt;
-
     //        cout << Vx1 << " " << Vy1 << " " << Vz1 << endl;
     /*
       if (msr_times[ilm] < part->t + part->Dt){
@@ -189,8 +145,10 @@ void detector_array_H::measure(particle * part)
 	// check whether the particle would be in any of the detectors at these moments
 	for (int i = 0; i<N; i++)
 	  {
-	    if (inside_quad(pt, h_handle[i])){
-	      h_handle[i].estimates[j] = h_handle[i].estimates[j] + part->weight*part->sig/h_handle[i].area*(h_handle[i].vctr.x*part->Vp0.x+h_handle[i].vctr.y*part->Vp0.y);
+	    if (inside_quad(pt, t_handle[i])){
+
+	      t_handle[i].estimates[j] = t_handle[i].estimates[j] + part->weight*part->sig/t_handle[i].area/mat->C;
+
 	    }
 
 	  }
@@ -203,23 +161,26 @@ void detector_array_H::measure(particle * part)
       }
   }
   else{
-    point nrmlzd_seg; // point structure to store the coordinates of the normalized vector colinear with segment
-    nrmlzd_seg.x = (part->seg.point2.x - part->seg.point1.x)/
-      sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
-    nrmlzd_seg.y = (part->seg.point2.y - part->seg.point1.y)/
-      sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
-
-    for (int i = 0; i<N; i++){ // go over all H detectors and analyze interaction with particle segment
-      if (overlap_quad(part->seg, h_handle[i])) {
-	cntrbt = overlap_length(part->seg, h_handle[i]); //this just gives a length
-	cntrbt = cntrbt*(nrmlzd_seg.x*h_handle[i].vctr.x + nrmlzd_seg.y*h_handle[i].vctr.y); // projects to the desired component
-	h_handle[i].estimate = h_handle[i].estimate + part->sig*part->weight*cntrbt/h_handle[i].area;
+    for (int i = 0; i<N; i++){ // go over all T detectors and analyze interaction with particle segment
+      if (overlap_quad(part->seg, t_handle[i])) {
+	cntrbt = overlap_length(part->seg, t_handle[i]); //this just gives a length
+	t_handle[i].estimate = t_handle[i].estimate + part->sig*part->weight*
+	  cntrbt/t_handle[i].area/mat->C/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y); // IMPORTANT: SINCE IT IS 2D, DO NOT USE part->V for norm of velocity
       }
     }
   }
 }
 
-void detector_array_H::write(const char* filename)
+void detector_array_T::show()
+{
+  for (int i = 0; i<N ; i++){
+    cout << t_handle[i].segs[0].point1.x << " " << t_handle[i].segs[0].point1.y << " "
+	 << t_handle[i].segs[0].point2.x << " " << t_handle[i].segs[0].point2.x << " " << t_handle[i].area
+	 << endl;
+  }
+}
+
+void detector_array_T::write(const char * filename)
 {
   ofstream file;
   file.open(filename);
@@ -227,14 +188,29 @@ void detector_array_H::write(const char* filename)
     if (strcmp(type.c_str(),"TRANSIENT")==0){
       for (int j = 0; j<Nt; j++)
 	{
-	  file << h_handle[i].estimates[j];
+	  file << t_handle[i].estimates[j];
 	  file << " " ;
 	}
       file << endl;
     }
     else{
-      file << h_handle[i].estimate << endl;
+      file << t_handle[i].estimate << endl;
     }
   }
 }
 
+void detector_array_T::show_results()
+{
+  for (int i = 0; i<N ; i++){
+    cout << t_handle[i].estimate << endl;
+
+  }
+}
+
+detector_array_T::~detector_array_T()
+{
+  delete[] t_handle;
+  if (msr_times!=NULL) {
+    delete[] msr_times;
+  }
+}
