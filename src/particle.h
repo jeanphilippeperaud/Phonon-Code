@@ -38,7 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "materials.h"
 
 int choose(RandomClass * r, double norm_cumul[],int N_interv);
-int PI;
+extern const double PI;
 
 class particle
  {
@@ -77,7 +77,7 @@ class particle
 			  prescribed_bdrs * presc, 
 			  periodic_bdrs * per);
 	 void show_all();
-         bool P_inside_quad(quadrilater quad);
+         bool P_inside_quad(quadrilater * quad);
  };
 
 #endif

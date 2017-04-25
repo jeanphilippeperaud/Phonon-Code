@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016, Jean-Philippe M. Péraud
+Copyright (c) 2017, Jean-Philippe M. Péraud
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "particle.h"
 #include "detector_array_T.h"
 #include <fstream>
+#include <string.h>
 #include "quadrilater.h"
 
 detector_array_T::detector_array_T(const char* filename,const char* filename_time)
@@ -145,7 +146,7 @@ void detector_array_T::measure(particle * part, materials * mat)
 	// check whether the particle would be in any of the detectors at these moments
 	for (int i = 0; i<N; i++)
 	  {
-	    if (inside_quad(pt, t_handle[i])){
+	    if (inside_quad(pt, &t_handle[i])){
 
 	      t_handle[i].estimates[j] = t_handle[i].estimates[j] + part->weight*part->sig/t_handle[i].area/mat->C;
 
@@ -162,8 +163,8 @@ void detector_array_T::measure(particle * part, materials * mat)
   }
   else{
     for (int i = 0; i<N; i++){ // go over all T detectors and analyze interaction with particle segment
-      if (overlap_quad(part->seg, t_handle[i])) {
-	cntrbt = overlap_length(part->seg, t_handle[i]); //this just gives a length
+      if (overlap_quad(part->seg, &t_handle[i])) {
+	cntrbt = overlap_length(part->seg, &t_handle[i]); //this just gives a length
 	t_handle[i].estimate = t_handle[i].estimate + part->sig*part->weight*
 	  cntrbt/t_handle[i].area/mat->C/sqrt(part->Vp0.x*part->Vp0.x+part->Vp0.y*part->Vp0.y); // IMPORTANT: SINCE IT IS 2D, DO NOT USE part->V for norm of velocity
       }

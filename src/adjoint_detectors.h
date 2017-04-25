@@ -25,22 +25,46 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef BODY_FORCE_H
-#define BODY_FORCE_H
 
-#include "utils.h"
-#include "quadrilater.h"
+#ifndef ADJOINT_DETECTORS_H
+#define ADJOINT_DETECTORS_H
 
+class prescribed_bdrs;
+class volumetric;
+class body_force;
+class initial;
+class particle;
+class sources;
 
-struct point;
-
-class body_force: public quadrilater
-{
-public:
-  body_force(){};
-  body_force(point pt1, point pt2, point pt3, point pt4, point grad);
-  point vctr;
-
+class adjoint_detectors{ // this class will read the relevant source files and define the adjoint detectors to be used.
+ public:
+  adjoint_detectors(){ptr_to_presc = NULL; sprd_src_array = NULL; bd_frc_array = NULL; initial_condition = NULL; msr_times = NULL;
+    steady_H = NULL; steady_T = NULL; H_estimates=NULL; T_estimates = NULL;};
+  ~adjoint_detectors();
+  adjoint_detectors(prescribed_bdrs * presc, const char * volumetric, const char * body_force, const char * initial, const char * filename_time, sources * src);
+  // THIS CONSTRUCTOR MAY ONLY BE CALLED AFTER THE adjoint sources HAVE BEEN INITIALIZED
+  void measure(particle * part, sources * src);
+  void write(const char * filenameT, const char * filenameH);
+  void show_results();
+  string type;
+  prescribed_bdrs * ptr_to_presc;
+  volumetric * sprd_src_array; //pointer to array of volumetric sources
+  body_force * bd_frc_array; //pointer to array of body force types of sources
+  initial * initial_condition;
+  int msr_index;
+  double ** H_estimates;
+  double ** T_estimates;
+  double * steady_H;
+  double * steady_T;
+  int Np;
+  int Nv;
+  int Nb;
+  int Ni;
+  int Ntot;
+  int Nt;
+  int NT;
+  int NH;
+  double * msr_times;
 };
 
 #endif

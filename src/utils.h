@@ -37,14 +37,11 @@ struct point{
     double y;
 };
 
-double det(double ax, double ay, double bx, double by){return ax*by-ay*bx;}
+double det(double ax, double ay, double bx, double by);
 
-double calc_area(point pt1, point pt2, point pt3){return det(pt2.x-pt1.x, pt2.y-pt1.y, pt3.x-pt1.x, pt3.y-pt1.y)/2;}
+double calc_area(point pt1, point pt2, point pt3);
 
-double dist_pts(point pt1, point pt2)
-{
-	return sqrt((pt2.x-pt1.x)*(pt2.x-pt1.x)+(pt2.y-pt1.y)*(pt2.y-pt1.y));
-}
+double dist_pts(point pt1, point pt2);
 
 point emit_from_triangle(point pt1, point pt2, point pt3,RandomClass * r);
 
@@ -64,6 +61,9 @@ point intrsct_pt(segment segmentab, segment segment12);
 //important: needs to be used along with intrsct_pt to check if the intersection exists
 
 double dist_to_intrsct(segment segmentab,point pt); // calculates the distance between starting point of segment and a point (to be used with previous functions above)
+
+// function used for printing the degree of completion in the main function
+void print_percent(int N, int Npart);
 
 
 #endif

@@ -49,16 +49,16 @@ public:
 /*int intrsct_test(segment segmentab, segment segment12);
 point intrsct_pt(segment segmentab, segment segment12);
 */
-bool inside_quad(point pt, quadrilater quad); // checks if point pt is inside quad. IMPORTANT: only works if quad is convex
+bool inside_quad(point pt, quadrilater * quad); // checks if point pt is inside quad. IMPORTANT: only works if quad is convex
 
-bool overlap_quad(segment seg, quadrilater quad);
+bool overlap_quad(segment seg, quadrilater * quad);
 // tests whether a segment and a quadrilater overlap
 
-double overlap_length(segment seg, quadrilater quad); // calculates the length of segment overlap
+double overlap_length(segment seg, quadrilater * quad); // calculates the length of segment overlap
 // IMPORTANT: if this function is used although there is no overlap, it can return a non zero value. The function overlap_quad
 // MUST be used before using this function.
 
-point emit_from_quadrilater(quadrilater quad, RandomClass * r);
+point emit_from_quadrilater(quadrilater * quad, RandomClass * r);
 // subdivide into 2 triangles and calculate their respective absolute areas
 
 

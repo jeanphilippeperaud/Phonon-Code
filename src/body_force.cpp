@@ -27,6 +27,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "body_force.h"
 #include "segment.h"
+#include "utils.h"
+
+
 
 body_force::body_force(point pt1, point pt2, point pt3, point pt4, point grad)
 {

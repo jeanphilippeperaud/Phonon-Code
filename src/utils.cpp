@@ -3,6 +3,16 @@
 #include "RandomClass.h"
 #include <iostream>
 
+double det(double ax, double ay, double bx, double by){return ax*by-ay*bx;}
+
+double calc_area(point pt1, point pt2, point pt3){return det(pt2.x-pt1.x, pt2.y-pt1.y, pt3.x-pt1.x, pt3.y-pt1.y)/2;}
+
+double dist_pts(point pt1, point pt2)
+{
+	return sqrt((pt2.x-pt1.x)*(pt2.x-pt1.x)+(pt2.y-pt1.y)*(pt2.y-pt1.y));
+}
+
+
 point emit_from_triangle(point pt1, point pt2, point pt3,RandomClass * r)
 {
     bool found = 0;
@@ -111,3 +121,12 @@ point intrsct_pt(segment segmentab, segment segment12) //calculates the intersec
 double dist_to_intrsct(segment segmentab,point pt){ // calculates the distance between starting point of segment and a point (to be used with previous functions above)
 	return sqrt((pt.x-segmentab.point1.x)*(pt.x-segmentab.point1.x)+(pt.y-segmentab.point1.y)*(pt.y-segmentab.point1.y));
 }
+
+// function used for printing the degree of completion in the main function
+void print_percent(int N, int Npart)
+{
+    if ((100*(long long)N) % Npart ==0)
+        cout << (100*(long long)N)/Npart << "% completed" << endl;
+}
+
+

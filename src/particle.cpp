@@ -27,7 +27,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "particle.h"
 #include <math.h>
+#include "utils.h"
 #define _USE_MATH_DEFINES
+ 
 
 void particle::show_all()
 {
@@ -165,7 +167,7 @@ void particle::finish_move(materials * mat, RandomClass * r, reflective_bdrs * r
   if (counter>COLL_MAX){alive = false;}
 }
 
-bool particle::P_inside_quad(quadrilater quad)
+bool particle::P_inside_quad(quadrilater * quad)
 {
   return inside_quad(pt0, quad);
 }

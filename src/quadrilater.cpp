@@ -87,17 +87,17 @@ quadrilater::~quadrilater()
   delete[] segs;
 }
 
-bool inside_quad(point pt, quadrilater quad) // checks if point pt is inside quad. IMPORTANT: only works if quad is convex
+bool inside_quad(point pt, quadrilater * quad) // checks if point pt is inside quad. IMPORTANT: only works if quad is convex
 {
   // just test by checking that following determinants are all positive
   bool test = 1;
   for (int i = 0; i<4; i++){
-    if (det(quad.segs[i].point1.x-pt.x, quad.segs[i].point1.y-pt.y, quad.segs[i].point2.x-pt.x, quad.segs[i].point2.y-pt.y)<=0){test = 0;}
+    if (det(quad->segs[i].point1.x-pt.x, quad->segs[i].point1.y-pt.y, quad->segs[i].point2.x-pt.x, quad->segs[i].point2.y-pt.y)<=0){test = 0;}
   }
   return test;
 }
 
-bool overlap_quad(segment seg, quadrilater quad) // test whether a segment and a quadrilater overlap
+bool overlap_quad(segment seg, quadrilater * quad) // test whether a segment and a quadrilater overlap
 {
   bool test = 0;
   if (inside_quad(seg.point1, quad) || inside_quad(seg.point2,quad)) // if one the two points is inside, then there is obviously some overlap
@@ -106,14 +106,14 @@ bool overlap_quad(segment seg, quadrilater quad) // test whether a segment and a
     }
   else {
     for (int i = 0; i<4; i++){
-      if (intrsct_test(seg, quad.segs[i])!=0){test = 1;} // if the segment intersects with one of the quad side, then there is overlap
+      if (intrsct_test(seg, quad->segs[i])!=0){test = 1;} // if the segment intersects with one of the quad side, then there is overlap
     }
   }
   return test;
 
 }
 
-double overlap_length(segment seg, quadrilater quad) // calculates the length of segment overlap
+double overlap_length(segment seg, quadrilater * quad) // calculates the length of segment overlap
 {// IMPORTANT: if this function is used although there is no overlap, it can return a non zero value. The function overlap_quad
 // MUST be used before using this function.
   double length = 0;
@@ -133,10 +133,10 @@ double overlap_length(segment seg, quadrilater quad) // calculates the length of
     i = -1;
     while (!found1){
       i++;
-      if (intrsct_test(seg, quad.segs[i])==1)
+      if (intrsct_test(seg, quad->segs[i])==1)
 	found1 = 1;
     }
-    pt2 = intrsct_pt(seg, quad.segs[i]);
+    pt2 = intrsct_pt(seg, quad->segs[i]);
     length = sqrt((pt2.x-seg.point1.x)*(pt2.x-seg.point1.x)+(pt2.y-seg.point1.y)*(pt2.y-seg.point1.y));
   }
   if (!inside_quad(seg.point1, quad) && inside_quad(seg.point2, quad)){ // only ending point inside
@@ -144,35 +144,35 @@ double overlap_length(segment seg, quadrilater quad) // calculates the length of
     i = -1;
     while (!found1){
       i++;
-      if (intrsct_test(seg, quad.segs[i])==-1)
+      if (intrsct_test(seg, quad->segs[i])==-1)
 	found1 = 1;
     }
     
-    pt1 = intrsct_pt(seg, quad.segs[i]);
+    pt1 = intrsct_pt(seg, quad->segs[i]);
     length = sqrt((seg.point2.x-pt1.x)*(seg.point2.x-pt1.x)+(seg.point2.y-pt1.y)*(seg.point2.y-pt1.y));
   }
   if (!inside_quad(seg.point1, quad) && !inside_quad(seg.point2, quad)){ // no point inside => two intersection points
     i = -1;
     while (!found1 && i<4){
       i++;
-      if (intrsct_test(seg, quad.segs[i])==-1) // looking for entry point
+      if (intrsct_test(seg, quad->segs[i])==-1) // looking for entry point
 	found1 = 1;
     }
 
     if (found1) {
-      pt1 = intrsct_pt(seg, quad.segs[i]);
+      pt1 = intrsct_pt(seg, quad->segs[i]);
     }
     
     found2 = 0;
     i = -1;
     while (!found2 && i<4){
       i++;
-      if (intrsct_test(seg, quad.segs[i])==1) // looking for exit point
+      if (intrsct_test(seg, quad->segs[i])==1) // looking for exit point
 	found2 = 1;
     }
     
     if (found1) {
-      pt2 = intrsct_pt(seg, quad.segs[i]);
+      pt2 = intrsct_pt(seg, quad->segs[i]);
     }
 
 
@@ -188,21 +188,21 @@ double overlap_length(segment seg, quadrilater quad) // calculates the length of
   return length;
 }
 
-point emit_from_quadrilater(quadrilater quad, RandomClass * r)
+point emit_from_quadrilater(quadrilater * quad, RandomClass * r)
 {
     // subdivide into 2 triangles and calculate their respective aboslute areas
-    double A1 = abs(calc_area(quad.segs[0].point1,quad.segs[1].point1,quad.segs[1].point2));
-    double A2 = abs(calc_area(quad.segs[0].point1,quad.segs[2].point1,quad.segs[2].point2));
+    double A1 = abs(calc_area(quad->segs[0].point1,quad->segs[1].point1,quad->segs[1].point2));
+    double A2 = abs(calc_area(quad->segs[0].point1,quad->segs[2].point1,quad->segs[2].point2));
     double threshold = A1/(A1+A2);
     double R1 = r->randu();
     point pt;
     if (R1<threshold)
     {
-        pt = emit_from_triangle(quad.segs[0].point1,quad.segs[1].point1,quad.segs[1].point2, r);
+        pt = emit_from_triangle(quad->segs[0].point1,quad->segs[1].point1,quad->segs[1].point2, r);
     }
     else
     {
-        pt = emit_from_triangle(quad.segs[0].point1,quad.segs[2].point1,quad.segs[2].point2, r);
+        pt = emit_from_triangle(quad->segs[0].point1,quad->segs[2].point1,quad->segs[2].point2, r);
     }
     return pt;
 }

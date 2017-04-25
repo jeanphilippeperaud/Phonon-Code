@@ -31,6 +31,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "utils.h"
 #include "quadrilater.h"
 
+struct point;
+
 class volumetric: public quadrilater
 {
 public:

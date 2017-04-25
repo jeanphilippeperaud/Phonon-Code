@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016, Jean-Philippe M. Péraud
+Copyright (c) 2017, Jean-Philippe M. Péraud
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "particle.h"
 #include "detector_array_H.h"
 #include <fstream>
+#include <string.h>
 #include "quadrilater.h"
 
 
@@ -150,7 +151,7 @@ void detector_array_H::measure(particle * part)
     double tpositions;
     point pt;
 
-    //        cout << Vx1 << " " << Vy1 << " " << Vz1 << endl;
+//            cout << Vx1 << " " << Vy1 << " " << Vz1 << endl;
     /*
       if (msr_times[ilm] < part->t + part->Dt){
       inm=ilm;
@@ -189,7 +190,7 @@ void detector_array_H::measure(particle * part)
 	// check whether the particle would be in any of the detectors at these moments
 	for (int i = 0; i<N; i++)
 	  {
-	    if (inside_quad(pt, h_handle[i])){
+	    if (inside_quad(pt, &h_handle[i])){
 	      h_handle[i].estimates[j] = h_handle[i].estimates[j] + part->weight*part->sig/h_handle[i].area*(h_handle[i].vctr.x*part->Vp0.x+h_handle[i].vctr.y*part->Vp0.y);
 	    }
 
@@ -210,8 +211,8 @@ void detector_array_H::measure(particle * part)
       sqrt((part->seg.point2.x - part->seg.point1.x)*(part->seg.point2.x - part->seg.point1.x)+(part->seg.point2.y - part->seg.point1.y)*(part->seg.point2.y - part->seg.point1.y));
 
     for (int i = 0; i<N; i++){ // go over all H detectors and analyze interaction with particle segment
-      if (overlap_quad(part->seg, h_handle[i])) {
-	cntrbt = overlap_length(part->seg, h_handle[i]); //this just gives a length
+      if (overlap_quad(part->seg, &h_handle[i])) {
+	cntrbt = overlap_length(part->seg, &h_handle[i]); //this just gives a length
 	cntrbt = cntrbt*(nrmlzd_seg.x*h_handle[i].vctr.x + nrmlzd_seg.y*h_handle[i].vctr.y); // projects to the desired component
 	h_handle[i].estimate = h_handle[i].estimate + part->sig*part->weight*cntrbt/h_handle[i].area;
       }
