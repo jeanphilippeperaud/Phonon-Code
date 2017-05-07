@@ -27,8 +27,9 @@ Once compiled, you may run Example 1 by placing the executable in the Example 1 
 # Input files
 The input files are all .txt format. They can be ranked in four categories: base, geometry, sources and detectors. In the current version, the names of the input files should not be changed (only the contents should be adapted by the user).
 
-<h3> - Base input files </h3>
+<h3> - Base input file </h3>
 The input file named "input.txt" is just used for specifying:
+- The type of simulation (FORWARD or ADJOINT)
 - The number of particles to be used (first entry)
 - The maximum number of collision events that a particle can undergo. By "collision", we mean here any "randomizing event", namely, a scattering event or a diffuse reflection on a boundary. This number is necessary only for <b> steady state </b> calculations <b>with no absorption term</b>, where particles need a termination criterion. Typically, this is the case for the study of 2D periodic systems. In other cases, particle trajectories get "naturally" terminated when they exit the system through absorbing boundaries or because the maximum estimate time has been reached.
 - Reference temperature for linearizing the system
@@ -55,14 +56,16 @@ Detectors are of two types: temperature detectors and heat flux detectors. They 
 There is a third detector file called "times.txt". This file refers to the measurement times of the detectors, for transient cases. <b> In order to run a transient calculation, this file must be included in the same folder as the executable. In order to run a steady state calculation, this file must be removed.</b> The first entry of this file must be the number of measurement times. The following entries are the measurement times.
 
 # Output format
-In this version, the code produces two files:
+In the FORWARD version, the code produces two files:
 - "results_T.txt" returns the temperature estimates.
 - "results_H.txt" returns the heat flux estimates.
-
+In the BACKWARD version, the code produces:
+- "adj_T_results.txt"
+- "adj_H_results.txt"
 In both cases, the estimates appear as a single column if the calculation is steady state. If the calculation is transient, then each column correspond to a measurement time.
 
 # Examples
-There currently are two examples in the repository, respectively in directory "Example1" and "thin-film". 
+There currently are five examples in the repository, respectively in directory Example1, Example1adjoint, Example2, Example2adjoint and thin-film. 
 
 # Visualization
 In folder "Tools", the python script "draw.py" should (normally) show you your detectors along with the associated temperature.
